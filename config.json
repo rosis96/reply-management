@@ -1,0 +1,9 @@
+{
+  "workspaces": {
+    "Insight Media Labs": {
+      "reply_followup_campaign_id": 11,
+      "client_profile": "insightgeo.json",
+      "reply_format": "insightgeo_reply_formats.json"
+    }
+  }
+}
