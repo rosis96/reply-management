@@ -358,7 +358,7 @@ def process_reply(lead_id, workspace_name):
     log("Sending immediate reply through EmailBison...")
     send_result = send_reply_to_bison(
         reply_id=reply_id,
-        message=ai_result["main_reply"],
+        message=ai_result["main_reply"].replace("\n", "<br><br>"),
         sender_email_id=latest_reply["sender_email_id"],
         to_name=latest_reply["from_name"],
         to_email=latest_reply["from_email_address"]
