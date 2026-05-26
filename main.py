@@ -14,6 +14,7 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMAILBISON_API_KEY = os.getenv("EMAILBISON_API_KEY")
 EMAILBISON_BASE_URL = os.getenv("EMAILBISON_BASE_URL", "").rstrip("/")
+HUMAN_REVIEW_WEBHOOK_URL = os.getenv("HUMAN_REVIEW_WEBHOOK_URL")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 app = FastAPI()
@@ -49,7 +50,30 @@ def save_log(filename, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
     return path
+def notify_human_review(lead_id, reply_id, thread, ai_result):
+    if not HUMAN_REVIEW_WEBHOOK_URL:
+        log("No HUMAN_REVIEW_WEBHOOK_URL set.")
+        return
 
+    payload = {
+        "lead_id": lead_id,
+        "reply_id": reply_id,
+        "reason": ai_result.get("intent", "human_review_needed"),
+        "ai_reply": ai_result.get("main_reply", ""),
+        "thread": thread
+    }
+
+    try:
+        response = requests.post(
+            HUMAN_REVIEW_WEBHOOK_URL,
+            json=payload,
+            timeout=15
+        )
+
+        log(f"Human review webhook sent: {response.status_code}")
+
+    except Exception as e:
+        log(f"Human review webhook failed: {e}")
 
 def load_processed_replies():
     os.makedirs("logs", exist_ok=True)
@@ -318,15 +342,7 @@ def process_reply(lead_id, workspace_name):
     log("Generating AI reply + followups...")
     ai_result = generate_ai_reply(client_profile, thread)
 
-    if ai_result.get("human_review_needed") is True:
-        log("Human review needed. Not sending.")
-        save_log(f"human_review_needed_{lead_id}_{reply_id}.json", {
-            "lead_id": lead_id,
-            "reply_id": reply_id,
-            "thread": thread,
-            "ai_result": ai_result
-        })
-        return
+	
 
     if ai_result.get("intent") == "unsubscribe":
         log("Unsubscribe detected. Not sending.")
