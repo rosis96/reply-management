@@ -547,7 +547,7 @@ def update_instantly_lead(lead_id, ai_result, api_key):
             "reply_intent": ai_result.get("intent", ""),
             "reply_confidence": str(ai_result.get("confidence", ""))
         },
-        "status": "FUP1"
+        "lead_label": "FUP1"
     }
 
     response = requests.patch(url, headers=instantly_headers(api_key), json=payload)
