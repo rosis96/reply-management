@@ -560,6 +560,62 @@ def get_instantly_lead_id(email, campaign_id, api_key):
         log(f"Lead lookup failed: {str(e)}")
         log(response.text)
         return None
+def get_latest_instantly_email_id(email, campaign_id, api_key):
+    url = "https://api.instantly.ai/api/v2/emails"
+
+    params = {
+        "search": email,
+        "campaign_id": campaign_id,
+        "limit": 10
+    }
+
+    response = requests.get(
+        url,
+        headers=instantly_headers(api_key),
+        params=params
+    )
+
+    log(f"Instantly email lookup: {response.status_code}")
+
+    try:
+        data = response.json()
+        items = data.get("items", [])
+
+        if not items:
+            log(f"No Instantly email found for {email}")
+            return None
+
+        return items[0].get("id")
+
+    except Exception as e:
+        log(f"Instantly email lookup failed: {str(e)}")
+        log(response.text)
+        return None
+
+
+def send_instantly_reply(reply_to_uuid, message, api_key):
+    url = "https://api.instantly.ai/api/v2/emails/reply"
+
+    payload = {
+        "reply_to_uuid": reply_to_uuid,
+        "body": {
+            "text": message,
+            "html": message.replace("\n", "<br><br>")
+        }
+    }
+
+    response = requests.post(
+        url,
+        headers=instantly_headers(api_key),
+        json=payload
+    )
+
+    log(f"Instantly reply send: {response.status_code}")
+
+    try:
+        return response.json()
+    except Exception:
+        return response.text
 
 def process_instantly_reply(payload):
     log("Processing Instantly reply webhook...")
