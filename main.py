@@ -87,13 +87,13 @@ def clean_html(text):
     if not text:
         return ""
 
+    text = str(text)
     text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
     text = text.replace("</p>", "\n").replace("<p>", "")
     text = text.replace("&nbsp;", " ")
     text = text.replace("&amp;", "&")
     text = text.replace("&lt;", "<")
     text = text.replace("&gt;", ">")
-
     return text.strip()
 
 
@@ -124,20 +124,76 @@ def format_email_for_bison(message):
     return message.replace("\n", "<br>")
 
 
+def extract_email_from_anything(value):
+    if not value:
+        return ""
+
+    if isinstance(value, dict):
+        for key in [
+            "email",
+            "email_address",
+            "from_email",
+            "from_email_address",
+            "sender_email",
+            "sender_email_address",
+            "account_email",
+            "sending_email"
+        ]:
+            if value.get(key) and "@" in str(value.get(key)):
+                return str(value.get(key)).strip()
+
+        value = json.dumps(value)
+
+    value = str(value)
+
+    angle_match = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", value)
+    if angle_match:
+        return angle_match[-1].strip()
+
+    plain_match = re.findall(r"[\w\.-]+@[\w\.-]+\.\w+", value)
+    if plain_match:
+        return plain_match[-1].strip()
+
+    return ""
+
+
+def extract_name_from_anything(value):
+    if not value:
+        return ""
+
+    if isinstance(value, dict):
+        name = value.get("name") or value.get("full_name") or value.get("sender_name")
+        if name and isinstance(name, str):
+            return name.strip().split(" ")[0].title()
+
+        email = extract_email_from_anything(value)
+        return sender_name_from_email(email)
+
+    value = str(value).strip()
+
+    name_match = re.search(r"([^<>\n]+)<[\w\.-]+@[\w\.-]+\.\w+>", value)
+    if name_match:
+        name = name_match.group(1).strip().strip('"').strip("'")
+        if name:
+            return name.split(" ")[0].title()
+
+    email = extract_email_from_anything(value)
+    return sender_name_from_email(email)
+
+
 def sender_name_from_email(email):
+    email = extract_email_from_anything(email)
+
     if not email:
         return ""
 
-    name = email.split("@")[0]
-    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
-    return " ".join(word.capitalize() for word in name.split())
+    local = email.split("@")[0]
+    local = local.replace(".", " ").replace("_", " ").replace("-", " ").strip()
 
+    if not local:
+        return ""
 
-def extract_sender_email_from_reply_text(reply_text):
-    matches = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", reply_text or "")
-    if matches:
-        return matches[-1]
-    return ""
+    return local.split(" ")[0].title()
 
 
 def get_sender_email_from_sent_emails(sent_emails):
@@ -146,32 +202,68 @@ def get_sender_email_from_sent_emails(sent_emails):
 
     latest_sent = sent_emails[0]
 
-    possible_fields = [
+    for field in [
+        "from",
+        "sender",
+        "email_sender",
+        "email_account",
         "from_email",
         "from_email_address",
         "sender_email",
         "sender_email_address",
-        "email_account",
         "sending_email",
         "account_email"
-    ]
-
-    for field in possible_fields:
+    ]:
         value = latest_sent.get(field)
-        if value and "@" in str(value):
-            return str(value).strip()
+        email = extract_email_from_anything(value)
+        if email:
+            return email
 
     body = latest_sent.get("email_body", "") or ""
-    return extract_sender_email_from_reply_text(body)
+    return extract_email_from_anything(body)
 
 
-def add_signature_once(message, sender_name, website):
+def get_sender_name_from_sent_emails(sent_emails):
+    if not sent_emails:
+        return ""
+
+    latest_sent = sent_emails[0]
+
+    for field in [
+        "from",
+        "sender",
+        "email_sender",
+        "email_account",
+        "from_name",
+        "sender_name",
+        "name"
+    ]:
+        value = latest_sent.get(field)
+        name = extract_name_from_anything(value)
+        if name:
+            return name
+
+    email = get_sender_email_from_sent_emails(sent_emails)
+    return sender_name_from_email(email)
+
+
+def strip_existing_signature(message):
     message = normalize_email_spacing(message)
 
-    lowered = message.lower()
+    patterns = [
+        r"\n+(Best|Kind regards|Regards|Thanks|Thank you),?\s*\n.*$",
+        r"\n+\{\{sendingAccountName\}\}.*$",
+        r"\n+\{\{website\}\}.*$"
+    ]
 
-    if "kind regards," in lowered or "\nbest," in lowered:
-        return message
+    for pattern in patterns:
+        message = re.sub(pattern, "", message, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    return message
+
+
+def add_signature(message, sender_name, website):
+    message = strip_existing_signature(message)
 
     if not sender_name:
         sender_name = "Team"
@@ -212,7 +304,8 @@ RULES:
 - Keep formatting compact and readable
 - Do not invent facts
 - Main reply must end with a clear CTA or question
-- Do not add sender signature yourself unless explicitly required by the provided format
+- Do not add sender signature yourself
+- Do not add Best, Kind regards, sender name, or website yourself
 - If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
 - If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
 
@@ -480,7 +573,10 @@ def process_reply(lead_id, workspace_name):
     sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key)
 
     sender_email = get_sender_email_from_sent_emails(sent_emails) or default_sender_email
-    sender_name = sender_name_from_email(sender_email) or default_sender_name or "Team"
+    sender_name = get_sender_name_from_sent_emails(sent_emails) or sender_name_from_email(sender_email) or default_sender_name or "Team"
+
+    log(f"Bison sender_email: {sender_email}")
+    log(f"Bison sender_name: {sender_name}")
 
     log("Building thread...")
     thread = build_thread(sent_emails, valid_replies)
@@ -489,7 +585,7 @@ def process_reply(lead_id, workspace_name):
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
     if ai_result.get("main_reply"):
-        ai_result["main_reply"] = add_signature_once(
+        ai_result["main_reply"] = add_signature(
             ai_result.get("main_reply", ""),
             sender_name,
             website
@@ -724,16 +820,29 @@ def process_instantly_reply(payload):
     log("Generating Instantly AI reply + followups...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
-    sender_email = extract_sender_email_from_reply_text(reply_text)
-
+    sender_email = extract_email_from_anything(payload.get("eaccount"))
     if not sender_email:
-        sender_email = payload.get("eaccount", "") or payload.get("from_email", "")
+        sender_email = extract_email_from_anything(payload.get("from_email"))
+    if not sender_email:
+        sender_email = extract_email_from_anything(reply_text)
 
-    sender_name = sender_name_from_email(sender_email) or "Team"
+    sender_name = extract_name_from_anything(payload.get("eaccount"))
+    if not sender_name:
+        sender_name = extract_name_from_anything(payload.get("from"))
+    if not sender_name:
+        sender_name = extract_name_from_anything(reply_text)
+    if not sender_name:
+        sender_name = sender_name_from_email(sender_email)
+    if not sender_name:
+        sender_name = "Team"
+
     website = workspace.get("website", "https://www.webaholics.ai")
 
+    log(f"Instantly sender_email: {sender_email}")
+    log(f"Instantly sender_name: {sender_name}")
+
     if ai_result.get("main_reply"):
-        ai_result["main_reply"] = add_signature_once(
+        ai_result["main_reply"] = add_signature(
             ai_result.get("main_reply", ""),
             sender_name,
             website
