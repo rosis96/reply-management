@@ -135,24 +135,51 @@ def sender_name_from_email(email):
 
 def extract_sender_email_from_reply_text(reply_text):
     matches = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", reply_text or "")
-
     if matches:
         return matches[-1]
-
     return ""
+
+
+def get_sender_email_from_sent_emails(sent_emails):
+    if not sent_emails:
+        return ""
+
+    latest_sent = sent_emails[0]
+
+    possible_fields = [
+        "from_email",
+        "from_email_address",
+        "sender_email",
+        "sender_email_address",
+        "email_account",
+        "sending_email",
+        "account_email"
+    ]
+
+    for field in possible_fields:
+        value = latest_sent.get(field)
+        if value and "@" in str(value):
+            return str(value).strip()
+
+    body = latest_sent.get("email_body", "") or ""
+    return extract_sender_email_from_reply_text(body)
 
 
 def add_signature_once(message, sender_name, website):
     message = normalize_email_spacing(message)
 
     lowered = message.lower()
+
     if "kind regards," in lowered or "\nbest," in lowered:
         return message
 
     if not sender_name:
-        sender_name = "Webaholics"
+        sender_name = "Team"
 
-    return f"{message}\n\nKind regards,\n{sender_name}\n{website}"
+    if website:
+        return f"{message}\n\nKind regards,\n{sender_name}\n{website}"
+
+    return f"{message}\n\nKind regards,\n{sender_name}"
 
 
 def generate_ai_reply(client_profile, reply_format, thread):
@@ -184,6 +211,8 @@ RULES:
 - Never add double blank lines
 - Keep formatting compact and readable
 - Do not invent facts
+- Main reply must end with a clear CTA or question
+- Do not add sender signature yourself unless explicitly required by the provided format
 - If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
 - If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
 
@@ -203,17 +232,38 @@ Return ONLY valid JSON:
 }}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        temperature=0.4,
-        messages=[
-            {"role": "system", "content": "Return only valid JSON. No markdown."},
-            {"role": "user", "content": prompt}
-        ]
-    )
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4.1-mini",
+                temperature=0.4,
+                messages=[
+                    {"role": "system", "content": "Return only valid JSON. No markdown."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
 
-    raw = response.choices[0].message.content.strip()
-    return json.loads(raw)
+            raw = response.choices[0].message.content.strip()
+            return json.loads(raw)
+
+        except Exception as e:
+            log(f"OpenAI attempt {attempt + 1} failed: {str(e)}")
+
+            if attempt < 2:
+                time.sleep(3)
+
+    return {
+        "intent": "human_review",
+        "confidence": 0,
+        "human_review_needed": True,
+        "main_reply": "",
+        "followup_1": "",
+        "followup_2": "",
+        "followup_3": "",
+        "followup_4": "",
+        "followup_5": "",
+        "followup_6": ""
+    }
 
 
 def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
@@ -395,8 +445,9 @@ def process_reply(lead_id, workspace_name):
     reply_followup_campaign_id = workspace["reply_followup_campaign_id"]
 
     client_profile = load_json_file(f"client_profiles/{workspace['client_profile']}")
-    sender_name = workspace.get("sender_name", "")
     website = workspace.get("website", "")
+    default_sender_email = workspace.get("default_sender_email", "")
+    default_sender_name = workspace.get("sender_name", "")
     reply_format = load_json_file(f"reply_formats/{workspace['reply_format']}")
 
     log("Fetching replies...")
@@ -427,6 +478,9 @@ def process_reply(lead_id, workspace_name):
 
     log("Fetching sent emails...")
     sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key)
+
+    sender_email = get_sender_email_from_sent_emails(sent_emails) or default_sender_email
+    sender_name = sender_name_from_email(sender_email) or default_sender_name or "Team"
 
     log("Building thread...")
     thread = build_thread(sent_emails, valid_replies)
@@ -485,6 +539,8 @@ def process_reply(lead_id, workspace_name):
         "reply_id": reply_id,
         "workspace_name": workspace_name,
         "thread": thread,
+        "sender_email": sender_email,
+        "sender_name": sender_name,
         "ai_result": ai_result,
         "send_result": send_result,
         "update_result": update_result,
@@ -669,8 +725,12 @@ def process_instantly_reply(payload):
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
     sender_email = extract_sender_email_from_reply_text(reply_text)
-    sender_name = sender_name_from_email(sender_email)
-    website = "https://www.webaholics.ai"
+
+    if not sender_email:
+        sender_email = payload.get("eaccount", "") or payload.get("from_email", "")
+
+    sender_name = sender_name_from_email(sender_email) or "Team"
+    website = workspace.get("website", "https://www.webaholics.ai")
 
     if ai_result.get("main_reply"):
         ai_result["main_reply"] = add_signature_once(
@@ -732,6 +792,7 @@ def process_instantly_reply(payload):
         "campaign_id": campaign_id,
         "reply_text": reply_text,
         "sender_email": sender_email,
+        "sender_name": sender_name,
         "subject": subject,
         "payload": payload,
         "ai_result": ai_result,
