@@ -510,12 +510,23 @@ def get_latest_instantly_email_id(email, campaign_id, api_key):
         log(response.text)
         return None
 
+def extract_sender_email_from_reply_text(reply_text):
+    import re
 
-def send_instantly_reply(reply_to_uuid, message, api_key):
+    matches = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", reply_text or "")
+
+    if matches:
+        return matches[-1]
+
+    return ""
+
+def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
     url = "https://api.instantly.ai/api/v2/emails/reply"
 
     payload = {
         "reply_to_uuid": reply_to_uuid,
+        "eaccount": eaccount,
+        "subject": subject,
         "body": {
             "text": message,
             "html": message.replace("\n", "<br><br>")
@@ -525,6 +536,7 @@ def send_instantly_reply(reply_to_uuid, message, api_key):
     response = requests.post(url, headers=instantly_headers(api_key), json=payload)
 
     log(f"Instantly reply send: {response.status_code}")
+    log(f"Instantly reply response: {response.text}")
 
     try:
         return response.json()
@@ -632,12 +644,21 @@ def process_instantly_reply(payload):
 
     if reply_to_uuid:
         log("Sending Instantly main reply...")
-        send_result = send_instantly_reply(
-            reply_to_uuid=reply_to_uuid,
-            message=ai_result.get("main_reply", ""),
-            api_key=instantly_api_key
-        )
-        log(f"Instantly send result: {send_result}")
+        sender_email = extract_sender_email_from_reply_text(reply_text)
+        subject = payload.get("reply_subject", "Re:")
+
+        if not sender_email:
+            log("No sender email found. Skipping reply send to avoid wrong sender.")
+            send_result = None
+        else:
+            send_result = send_instantly_reply(
+                reply_to_uuid=reply_to_uuid,
+                message=ai_result.get("main_reply", ""),
+                eaccount=sender_email,
+                subject=subject,
+                api_key=instantly_api_key
+            )
+            log(f"Instantly send result: {send_result}")
     else:
         log("No reply_to_uuid found. Skipping reply send.")
 
