@@ -3,6 +3,7 @@
 import os
 import json
 import time
+import re
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
@@ -96,13 +97,62 @@ def clean_html(text):
     return text.strip()
 
 
-def format_email_for_bison(message):
+def normalize_email_spacing(message):
     if not message:
         return ""
 
-    message = str(message).strip()
-    message = message.replace("\\n", "\n")
-    return message.replace("\n", "<br><br>")
+    message = str(message).replace("\\n", "\n").strip()
+    lines = [line.strip() for line in message.splitlines()]
+
+    cleaned = []
+    blank_added = False
+
+    for line in lines:
+        if line == "":
+            if not blank_added:
+                cleaned.append("")
+                blank_added = True
+        else:
+            cleaned.append(line)
+            blank_added = False
+
+    return "\n".join(cleaned).strip()
+
+
+def format_email_for_bison(message):
+    message = normalize_email_spacing(message)
+    return message.replace("\n", "<br>")
+
+
+def sender_name_from_email(email):
+    if not email:
+        return ""
+
+    name = email.split("@")[0]
+    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
+    return " ".join(word.capitalize() for word in name.split())
+
+
+def extract_sender_email_from_reply_text(reply_text):
+    matches = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", reply_text or "")
+
+    if matches:
+        return matches[-1]
+
+    return ""
+
+
+def add_signature_once(message, sender_name, website):
+    message = normalize_email_spacing(message)
+
+    lowered = message.lower()
+    if "kind regards," in lowered or "\nbest," in lowered:
+        return message
+
+    if not sender_name:
+        sender_name = "Webaholics"
+
+    return f"{message}\n\nKind regards,\n{sender_name}\n{website}"
 
 
 def generate_ai_reply(client_profile, reply_format, thread):
@@ -191,7 +241,7 @@ def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
 
 
 # -------------------------
-# EmailBison Functions
+# EmailBison
 # -------------------------
 
 def fetch_replies(lead_id, api_key):
@@ -385,7 +435,11 @@ def process_reply(lead_id, workspace_name):
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
     if ai_result.get("main_reply"):
-        ai_result["main_reply"] += f"\n\nBest,\n{sender_name}\n{website}"
+        ai_result["main_reply"] = add_signature_once(
+            ai_result.get("main_reply", ""),
+            sender_name,
+            website
+        )
 
     if ai_result.get("intent") == "unsubscribe":
         log("Unsubscribe detected. Not sending.")
@@ -446,7 +500,7 @@ def process_reply(lead_id, workspace_name):
 
 
 # -------------------------
-# Instantly Functions
+# Instantly
 # -------------------------
 
 def get_instantly_lead_id(email, campaign_id, api_key):
@@ -510,18 +564,11 @@ def get_latest_instantly_email_id(email, campaign_id, api_key):
         log(response.text)
         return None
 
-def extract_sender_email_from_reply_text(reply_text):
-    import re
-
-    matches = re.findall(r"<([^<>@\s]+@[^<>@\s]+\.[^<>@\s]+)>", reply_text or "")
-
-    if matches:
-        return matches[-1]
-
-    return ""
 
 def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
     url = "https://api.instantly.ai/api/v2/emails/reply"
+
+    message = normalize_email_spacing(message)
 
     payload = {
         "reply_to_uuid": reply_to_uuid,
@@ -529,7 +576,7 @@ def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
         "subject": subject,
         "body": {
             "text": message,
-            "html": message.replace("\n", "<br><br>")
+            "html": message.replace("\n", "<br>")
         }
     }
 
@@ -565,6 +612,7 @@ def update_instantly_lead(lead_id, ai_result, api_key):
     response = requests.patch(url, headers=instantly_headers(api_key), json=payload)
 
     log(f"Instantly lead update: {response.status_code}")
+    log(f"Instantly lead update response: {response.text}")
 
     try:
         return response.json()
@@ -590,6 +638,7 @@ def process_instantly_reply(payload):
     campaign_id = payload.get("campaign_id", "")
     first_name = payload.get("firstName", "")
     reply_text = payload.get("reply_text", "")
+    subject = payload.get("reply_subject", "Re:")
 
     if not email or not campaign_id:
         log("Missing email or campaign_id in Instantly webhook.")
@@ -619,6 +668,17 @@ def process_instantly_reply(payload):
     log("Generating Instantly AI reply + followups...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
+    sender_email = extract_sender_email_from_reply_text(reply_text)
+    sender_name = sender_name_from_email(sender_email)
+    website = "https://www.webaholics.ai"
+
+    if ai_result.get("main_reply"):
+        ai_result["main_reply"] = add_signature_once(
+            ai_result.get("main_reply", ""),
+            sender_name,
+            website
+        )
+
     if ai_result.get("intent") == "unsubscribe":
         log("Instantly unsubscribe detected. Not sending.")
         save_log(f"instantly_unsubscribe_{lead_id}.json", {
@@ -643,14 +703,10 @@ def process_instantly_reply(payload):
     send_result = None
 
     if reply_to_uuid:
-        log("Sending Instantly main reply...")
-        sender_email = extract_sender_email_from_reply_text(reply_text)
-        subject = payload.get("reply_subject", "Re:")
-
         if not sender_email:
             log("No sender email found. Skipping reply send to avoid wrong sender.")
-            send_result = None
         else:
+            log("Sending Instantly main reply...")
             send_result = send_instantly_reply(
                 reply_to_uuid=reply_to_uuid,
                 message=ai_result.get("main_reply", ""),
@@ -661,20 +717,6 @@ def process_instantly_reply(payload):
             log(f"Instantly send result: {send_result}")
     else:
         log("No reply_to_uuid found. Skipping reply send.")
-
-def sender_name_from_email(email):
-    name = email.split("@")[0]
-    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
-    return " ".join(word.capitalize() for word in name.split())
-
-sender_email = payload.get("from_email", "")
-
-sender_name = sender_name_from_email(sender_email)
-website = "https://www.webaholics.ai"
-
-if ai_result.get("main_reply"):
-    ai_result["main_reply"] = ai_result["main_reply"].strip()
-    ai_result["main_reply"] += f"\n\nKind regards,\n{sender_name}\n{website}"
 
     log("Updating Instantly lead variables...")
     update_result = update_instantly_lead(
@@ -689,6 +731,8 @@ if ai_result.get("main_reply"):
         "first_name": first_name,
         "campaign_id": campaign_id,
         "reply_text": reply_text,
+        "sender_email": sender_email,
+        "subject": subject,
         "payload": payload,
         "ai_result": ai_result,
         "send_result": send_result,
