@@ -601,7 +601,13 @@ def process_instantly_reply(payload):
 
     client_profile = load_json_file("client_profiles/webaholics.json")
 
-    ai_result = generate_ai_reply(client_profile, thread)
+    reply_format = load_json_file("reply_formats/webaholics_reply_formats.json")
+
+    ai_result = generate_ai_reply(
+      reply_format,
+      client_profile,
+      thread
+)
 
     log("Updating Instantly lead variables...")
 
