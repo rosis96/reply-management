@@ -523,5 +523,82 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
 
 @app.get("/test")
 def test_run():
+     return {"success": True, "message": "test route active"}
+
+def process_instantly_reply(payload):
+    log("Processing Instantly reply webhook...")
+
+    workspace_name = "Webaholics"
+
+    workspace = CONFIG["workspaces"][workspace_name]
+
+    api_key_env = workspace["api_key_env"]
+    instantly_api_key = os.getenv(api_key_env)
+
+    if not instantly_api_key:
+        log(f"Missing Instantly API key: {api_key_env}")
+        return
+
+    lead = payload.get("lead", {})
+
+    lead_id = lead.get("id")
+    email = lead.get("email", "")
+    first_name = lead.get("first_name", "")
+
+    reply_text = payload.get("reply_text", "")
+
+    if not lead_id:
+        log("No lead_id found in webhook.")
+        return
+
+    thread = [
+        {
+            "type": "reply",
+            "body": reply_text
+        }
+    ]
+
+    client_profile = load_json_file("client_profiles/webaholics.json")
+
+    ai_result = generate_ai_reply(client_profile, thread)
+
+    log("Updating Instantly lead variables...")
+
+    update_result = update_instantly_lead(
+        lead_id=lead_id,
+        ai_result=ai_result,
+        api_key=instantly_api_key
+    )
+
+    final_log = {
+        "lead_id": lead_id,
+        "email": email,
+        "first_name": first_name,
+        "reply_text": reply_text,
+        "ai_result": ai_result,
+        "update_result": update_result
+    }
+
+    save_log(
+        f"instantly_reply_{lead_id}.json",
+        final_log
+    )
+
+    log("Instantly reply processing completed.")
+
+
+@app.post("/instantly-reply")
+async def instantly_reply_webhook(request: Request, background_tasks: BackgroundTasks):
+    payload = await request.json()
+
+    background_tasks.add_task(
+        process_instantly_reply,
+        payload
+    )
+
+    return {
+        "success": True,
+        "message": "Instantly reply received"
+    }
     process_reply(20470, "Insight Media Labs")
     return {"success": True, "message": "Test completed"}
