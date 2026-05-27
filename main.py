@@ -524,6 +524,28 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
 @app.get("/test")
 def test_run():
      return {"success": True, "message": "test route active"}
+def get_instantly_lead_id(email, campaign_id, api_key):
+    url = f"https://api.instantly.ai/api/v2/leads?campaign_id={campaign_id}&email={email}"
+
+    response = requests.get(
+        url,
+        headers=instantly_headers(api_key)
+    )
+
+    try:
+        data = response.json()
+
+        items = data.get("items", [])
+
+        if not items:
+            log(f"No Instantly lead found for {email}")
+            return None
+
+        return items[0].get("id")
+
+    except Exception as e:
+        log(f"Lead lookup failed: {str(e)}")
+        return None
 
 def process_instantly_reply(payload):
     log("Processing Instantly reply webhook...")
@@ -540,11 +562,15 @@ def process_instantly_reply(payload):
         log(f"Missing Instantly API key: {api_key_env}")
         return
 
-    lead = payload.get("lead", {})
+    email = payload.get("lead_email", "")
+    campaign_id = payload.get("campaign_id", "")
+    first_name = payload.get("firstName", "")
 
-    lead_id = lead.get("id")
-    email = lead.get("email", "")
-    first_name = lead.get("first_name", "")
+    lead_id = get_instantly_lead_id(
+      email=email,
+      campaign_id=campaign_id,
+      api_key=instantly_api_key
+)
 
     reply_text = payload.get("reply_text", "")
 
