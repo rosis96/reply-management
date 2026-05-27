@@ -35,44 +35,15 @@ def bison_headers(api_key):
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
+
+
 def instantly_headers(api_key):
     return {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Content-Type": "application/json"
     }
 
-
-def update_instantly_lead(lead_id, ai_result, api_key):
-    url = f"https://api.instantly.ai/api/v2/leads/{lead_id}"
-
-    payload = {
-        "custom_variables": {
-            "main_reply": ai_result.get("main_reply", ""),
-            "followup_1": ai_result.get("followup_1", ""),
-            "followup_2": ai_result.get("followup_2", ""),
-            "followup_3": ai_result.get("followup_3", ""),
-            "followup_4": ai_result.get("followup_4", ""),
-            "followup_5": ai_result.get("followup_5", ""),
-            "followup_6": ai_result.get("followup_6", ""),
-            "reply_intent": ai_result.get("intent", ""),
-            "reply_confidence": str(ai_result.get("confidence", ""))
-        },
-        "status": "FUP1"
-    }
-
-    response = requests.patch(
-        url,
-        headers=instantly_headers(api_key),
-        json=payload
-    )
-
-    log(f"Instantly lead update: {response.status_code}")
-
-    try:
-        return response.json()
-    except Exception:
-        return response.text
 
 def load_json_file(path):
     with open(path, "r") as f:
@@ -85,34 +56,6 @@ def save_log(filename, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
     return path
-
-
-def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
-    if not HUMAN_REVIEW_WEBHOOK_URL:
-        log("No HUMAN_REVIEW_WEBHOOK_URL set.")
-        return None
-
-    payload = {
-        "workspace_name": workspace_name,
-        "lead_id": lead_id,
-        "reply_id": reply_id,
-        "reason": ai_result.get("intent", "human_review_needed"),
-        "confidence": ai_result.get("confidence"),
-        "ai_reply": ai_result.get("main_reply", ""),
-        "thread": thread
-    }
-
-    try:
-        response = requests.post(
-            HUMAN_REVIEW_WEBHOOK_URL,
-            json=payload,
-            timeout=15
-        )
-        log(f"Human review webhook sent: {response.status_code}")
-        return response.text
-    except Exception as e:
-        log(f"Human review webhook failed: {e}")
-        return None
 
 
 def load_processed_replies():
@@ -139,6 +82,118 @@ def save_processed_reply(reply_id):
         json.dump(processed, f, indent=2)
 
 
+def clean_html(text):
+    if not text:
+        return ""
+
+    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    text = text.replace("</p>", "\n").replace("<p>", "")
+    text = text.replace("&nbsp;", " ")
+    text = text.replace("&amp;", "&")
+    text = text.replace("&lt;", "<")
+    text = text.replace("&gt;", ">")
+
+    return text.strip()
+
+
+def format_email_for_bison(message):
+    if not message:
+        return ""
+
+    message = str(message).strip()
+    message = message.replace("\\n", "\n")
+    return message.replace("\n", "<br><br>")
+
+
+def generate_ai_reply(client_profile, reply_format, thread):
+    prompt = f"""
+You are an expert outbound sales reply assistant.
+
+CLIENT PROFILE:
+{json.dumps(client_profile, indent=2)}
+
+REPLY FORMAT RULES:
+{json.dumps(reply_format, indent=2)}
+
+EMAIL THREAD:
+{json.dumps(thread, indent=2)}
+
+TASK:
+Write the immediate reply we should send now and generate 6 future follow-ups.
+
+RULES:
+- Sound human
+- Do not sound robotic
+- Do not use em dashes
+- Do not over-explain
+- Match the prospect's tone
+- Continue from the actual thread
+- Keep main_reply under 100 words
+- Use short paragraphs
+- Use only one empty line between paragraphs
+- Never add double blank lines
+- Keep formatting compact and readable
+- Do not invent facts
+- If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
+- If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
+
+Return ONLY valid JSON:
+
+{{
+  "intent": "",
+  "confidence": 0,
+  "human_review_needed": false,
+  "main_reply": "",
+  "followup_1": "",
+  "followup_2": "",
+  "followup_3": "",
+  "followup_4": "",
+  "followup_5": "",
+  "followup_6": ""
+}}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        temperature=0.4,
+        messages=[
+            {"role": "system", "content": "Return only valid JSON. No markdown."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    raw = response.choices[0].message.content.strip()
+    return json.loads(raw)
+
+
+def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
+    if not HUMAN_REVIEW_WEBHOOK_URL:
+        log("No HUMAN_REVIEW_WEBHOOK_URL set.")
+        return None
+
+    payload = {
+        "workspace_name": workspace_name,
+        "lead_id": lead_id,
+        "reply_id": reply_id,
+        "reason": ai_result.get("intent", "human_review_needed"),
+        "confidence": ai_result.get("confidence"),
+        "ai_reply": ai_result.get("main_reply", ""),
+        "thread": thread
+    }
+
+    try:
+        response = requests.post(HUMAN_REVIEW_WEBHOOK_URL, json=payload, timeout=15)
+        log(f"Human review webhook sent: {response.status_code}")
+        return response.text
+    except Exception as e:
+        log(f"Human review webhook failed: {e}")
+        return None
+
+
+# -------------------------
+# EmailBison Functions
+# -------------------------
+
 def fetch_replies(lead_id, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}/replies"
     response = requests.get(url, headers=bison_headers(api_key))
@@ -159,20 +214,6 @@ def fetch_sent_emails(lead_id, api_key):
         return []
 
     return response.json().get("data", [])
-
-
-def clean_html(text):
-    if not text:
-        return ""
-
-    text = text.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
-    text = text.replace("</p>", "\n").replace("<p>", "")
-    text = text.replace("&nbsp;", " ")
-    text = text.replace("&amp;", "&")
-    text = text.replace("&lt;", "<")
-    text = text.replace("&gt;", ">")
-
-    return text.strip()
 
 
 def build_thread(sent_emails, replies):
@@ -207,71 +248,6 @@ def get_latest_reply(replies):
     if not replies:
         return None
     return replies[0]
-
-
-def format_email_for_bison(message):
-    if not message:
-        return ""
-
-    message = str(message).strip()
-    message = message.replace("\\n", "\n")
-    return message.replace("\n", "<br><br>")
-
-
-def generate_ai_reply(client_profile, reply_format, thread):
-    prompt = f"""
-You are an expert outbound sales reply assistant.
-
-CLIENT PROFILE:
-{json.dumps(client_profile, indent=2)}
-
-REPLY FORMAT RULES:
-{json.dumps(reply_format, indent=2)}
-
-EMAIL THREAD:
-{json.dumps(thread, indent=2)}
-
-TASK:
-Write the immediate reply we should send now and generate 5 future follow-ups.
-
-RULES:
-- Sound human
-- Do not sound robotic and remove em dashes while replying
-- Do not over-explain
-- Match the prospect's tone
-- Continue from the actual thread
-- Keep main_reply under 100 words
-- Use short paragraphs
-- Use only SINGLE empty line between paragraphs
-- Never add double blank lines
-- Keep formatting compact and readable
-
-Return ONLY valid JSON:
-
-{{
-  "intent": "",
-  "confidence": 0,
-  "human_review_needed": false,
-  "main_reply": "",
-  "followup_1": "",
-  "followup_2": "",
-  "followup_3": "",
-  "followup_4": "",
-  "followup_5": ""
-}}
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        temperature=0.4,
-        messages=[
-            {"role": "system", "content": "Return only valid JSON. No markdown."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-
-    raw = response.choices[0].message.content.strip()
-    return json.loads(raw)
 
 
 def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, api_key):
@@ -320,6 +296,7 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key):
             {"name": "followup_3", "value": ai_result.get("followup_3", "")},
             {"name": "followup_4", "value": ai_result.get("followup_4", "")},
             {"name": "followup_5", "value": ai_result.get("followup_5", "")},
+            {"name": "followup_6", "value": ai_result.get("followup_6", "")},
             {"name": "reply_intent", "value": ai_result.get("intent", "")},
             {"name": "reply_confidence", "value": str(ai_result.get("confidence", ""))}
         ]
@@ -337,9 +314,7 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key):
 def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/campaigns/{campaign_id}/leads/attach-leads"
 
-    payload = {
-        "lead_ids": [lead_id]
-    }
+    payload = {"lead_ids": [lead_id]}
 
     response = requests.post(url, headers=bison_headers(api_key), json=payload)
 
@@ -407,7 +382,6 @@ def process_reply(lead_id, workspace_name):
     thread = build_thread(sent_emails, valid_replies)
 
     log("Generating AI reply + followups...")
-   
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
     if ai_result.get("main_reply"):
@@ -415,35 +389,12 @@ def process_reply(lead_id, workspace_name):
 
     if ai_result.get("intent") == "unsubscribe":
         log("Unsubscribe detected. Not sending.")
-        save_log(f"unsubscribe_detected_{lead_id}_{reply_id}.json", {
-            "lead_id": lead_id,
-            "reply_id": reply_id,
-            "workspace_name": workspace_name,
-            "thread": thread,
-            "ai_result": ai_result
-        })
         save_processed_reply(reply_id)
         return
 
     if ai_result.get("human_review_needed") is True:
         log("Human review needed. Not sending.")
-
-        notify_human_review(
-            lead_id=lead_id,
-            reply_id=reply_id,
-            workspace_name=workspace_name,
-            thread=thread,
-            ai_result=ai_result
-        )
-
-        save_log(f"human_review_needed_{lead_id}_{reply_id}.json", {
-            "lead_id": lead_id,
-            "reply_id": reply_id,
-            "workspace_name": workspace_name,
-            "thread": thread,
-            "ai_result": ai_result
-        })
-
+        notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result)
         save_processed_reply(reply_id)
         return
 
@@ -479,7 +430,6 @@ def process_reply(lead_id, workspace_name):
         "lead_id": lead_id,
         "reply_id": reply_id,
         "workspace_name": workspace_name,
-        "latest_reply": latest_reply,
         "thread": thread,
         "ai_result": ai_result,
         "send_result": send_result,
@@ -495,35 +445,9 @@ def process_reply(lead_id, workspace_name):
     log(f"Lead attached to follow-up campaign: {bool(attach_result)}")
 
 
-@app.get("/")
-def health_check():
-    return {"status": "reply_management_running"}
-
-
-@app.post("/bison-reply")
-async def bison_reply_webhook(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
-
-    lead_id = payload.get("lead_id")
-    workspace_name = payload.get("workspace_name", "Insight Media Labs")
-
-    if not lead_id:
-        return {"success": False, "error": "Missing lead_id"}
-
-    background_tasks.add_task(process_reply, int(lead_id), workspace_name)
-
-    return {
-        "success": True,
-        "message": "Reply job accepted",
-        "lead_id": lead_id,
-        "workspace_name": workspace_name,
-        "delay_seconds": REPLY_DELAY_SECONDS
-    }
-
-
-@app.get("/test")
-def test_run():
-    return {"success": True, "message": "test route active"}
+# -------------------------
+# Instantly Functions
+# -------------------------
 
 def get_instantly_lead_id(email, campaign_id, api_key):
     url = "https://api.instantly.ai/api/v2/leads/list"
@@ -534,11 +458,7 @@ def get_instantly_lead_id(email, campaign_id, api_key):
         "limit": 10
     }
 
-    response = requests.post(
-        url,
-        headers=instantly_headers(api_key),
-        json=payload
-    )
+    response = requests.post(url, headers=instantly_headers(api_key), json=payload)
 
     log(f"Instantly lead lookup: {response.status_code}")
 
@@ -560,6 +480,8 @@ def get_instantly_lead_id(email, campaign_id, api_key):
         log(f"Lead lookup failed: {str(e)}")
         log(response.text)
         return None
+
+
 def get_latest_instantly_email_id(email, campaign_id, api_key):
     url = "https://api.instantly.ai/api/v2/emails"
 
@@ -569,11 +491,7 @@ def get_latest_instantly_email_id(email, campaign_id, api_key):
         "limit": 10
     }
 
-    response = requests.get(
-        url,
-        headers=instantly_headers(api_key),
-        params=params
-    )
+    response = requests.get(url, headers=instantly_headers(api_key), params=params)
 
     log(f"Instantly email lookup: {response.status_code}")
 
@@ -604,11 +522,7 @@ def send_instantly_reply(reply_to_uuid, message, api_key):
         }
     }
 
-    response = requests.post(
-        url,
-        headers=instantly_headers(api_key),
-        json=payload
-    )
+    response = requests.post(url, headers=instantly_headers(api_key), json=payload)
 
     log(f"Instantly reply send: {response.status_code}")
 
@@ -617,12 +531,40 @@ def send_instantly_reply(reply_to_uuid, message, api_key):
     except Exception:
         return response.text
 
+
+def update_instantly_lead(lead_id, ai_result, api_key):
+    url = f"https://api.instantly.ai/api/v2/leads/{lead_id}"
+
+    payload = {
+        "custom_variables": {
+            "main_reply": ai_result.get("main_reply", ""),
+            "followup_1": ai_result.get("followup_1", ""),
+            "followup_2": ai_result.get("followup_2", ""),
+            "followup_3": ai_result.get("followup_3", ""),
+            "followup_4": ai_result.get("followup_4", ""),
+            "followup_5": ai_result.get("followup_5", ""),
+            "followup_6": ai_result.get("followup_6", ""),
+            "reply_intent": ai_result.get("intent", ""),
+            "reply_confidence": str(ai_result.get("confidence", ""))
+        },
+        "status": "FUP1"
+    }
+
+    response = requests.patch(url, headers=instantly_headers(api_key), json=payload)
+
+    log(f"Instantly lead update: {response.status_code}")
+
+    try:
+        return response.json()
+    except Exception:
+        return response.text
+
+
 def process_instantly_reply(payload):
     log("Processing Instantly reply webhook...")
     log(json.dumps(payload, indent=2))
 
     workspace_name = "Webaholics"
-
     workspace = CONFIG["workspaces"][workspace_name]
 
     api_key_env = workspace["api_key_env"]
@@ -632,38 +574,53 @@ def process_instantly_reply(payload):
         log(f"Missing Instantly API key: {api_key_env}")
         return
 
-    email = payload.get("lead_email", "")
+    email = payload.get("lead_email", "") or payload.get("email", "")
     campaign_id = payload.get("campaign_id", "")
     first_name = payload.get("firstName", "")
-
-    lead_id = get_instantly_lead_id(
-      email=email,
-      campaign_id=campaign_id,
-      api_key=instantly_api_key
-    )
-
     reply_text = payload.get("reply_text", "")
 
+    if not email or not campaign_id:
+        log("Missing email or campaign_id in Instantly webhook.")
+        return
+
+    lead_id = get_instantly_lead_id(
+        email=email,
+        campaign_id=campaign_id,
+        api_key=instantly_api_key
+    )
+
     if not lead_id:
-        log("No lead_id found in webhook.")
+        log("No lead_id found in Instantly.")
         return
 
     thread = [
         {
             "type": "reply",
-            "body": reply_text
+            "body": reply_text,
+            "payload": payload
         }
     ]
 
     client_profile = load_json_file("client_profiles/webaholics.json")
-
     reply_format = load_json_file("reply_formats/webaholics_reply_formats.json")
 
-    ai_result = generate_ai_reply(
-        client_profile,
-        reply_format,
-        thread
-    )
+    log("Generating Instantly AI reply + followups...")
+    ai_result = generate_ai_reply(client_profile, reply_format, thread)
+
+    if ai_result.get("intent") == "unsubscribe":
+        log("Instantly unsubscribe detected. Not sending.")
+        save_log(f"instantly_unsubscribe_{lead_id}.json", {
+            "lead_id": lead_id,
+            "email": email,
+            "payload": payload,
+            "ai_result": ai_result
+        })
+        return
+
+    if ai_result.get("human_review_needed") is True:
+        log("Instantly human review needed. Not sending.")
+        notify_human_review(lead_id, "instantly", workspace_name, thread, ai_result)
+        return
 
     reply_to_uuid = get_latest_instantly_email_id(
         email=email,
@@ -671,21 +628,20 @@ def process_instantly_reply(payload):
         api_key=instantly_api_key
     )
 
+    send_result = None
+
     if reply_to_uuid:
         log("Sending Instantly main reply...")
-
         send_result = send_instantly_reply(
             reply_to_uuid=reply_to_uuid,
             message=ai_result.get("main_reply", ""),
             api_key=instantly_api_key
         )
-
         log(f"Instantly send result: {send_result}")
     else:
         log("No reply_to_uuid found. Skipping reply send.")
 
     log("Updating Instantly lead variables...")
-
     update_result = update_instantly_lead(
         lead_id=lead_id,
         ai_result=ai_result,
@@ -696,27 +652,59 @@ def process_instantly_reply(payload):
         "lead_id": lead_id,
         "email": email,
         "first_name": first_name,
+        "campaign_id": campaign_id,
         "reply_text": reply_text,
+        "payload": payload,
         "ai_result": ai_result,
+        "send_result": send_result,
         "update_result": update_result
     }
 
-    save_log(
-        f"instantly_reply_{lead_id}.json",
-        final_log
-    )
+    save_log(f"instantly_reply_{lead_id}.json", final_log)
 
     log("Instantly reply processing completed.")
+
+
+# -------------------------
+# Routes
+# -------------------------
+
+@app.get("/")
+def health_check():
+    return {"status": "reply_management_running"}
+
+
+@app.get("/test")
+def test_run():
+    return {"success": True, "message": "test route active"}
+
+
+@app.post("/bison-reply")
+async def bison_reply_webhook(request: Request, background_tasks: BackgroundTasks):
+    payload = await request.json()
+
+    lead_id = payload.get("lead_id")
+    workspace_name = payload.get("workspace_name", "Insight Media Labs")
+
+    if not lead_id:
+        return {"success": False, "error": "Missing lead_id"}
+
+    background_tasks.add_task(process_reply, int(lead_id), workspace_name)
+
+    return {
+        "success": True,
+        "message": "Reply job accepted",
+        "lead_id": lead_id,
+        "workspace_name": workspace_name,
+        "delay_seconds": REPLY_DELAY_SECONDS
+    }
 
 
 @app.post("/instantly-reply")
 async def instantly_reply_webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
 
-    background_tasks.add_task(
-        process_instantly_reply,
-        payload
-    )
+    background_tasks.add_task(process_instantly_reply, payload)
 
     return {
         "success": True,
