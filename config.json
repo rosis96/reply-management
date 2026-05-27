@@ -17,6 +17,14 @@
       "reply_followup_campaign_id": 15,
       "client_profile": "maildoso.json",
       "reply_format": "maildoso_reply_formats.json"
+    },
+
+      "Webaholics": {
+        "platform": "instantly",
+        "api_key_env": "INSTANTLY_API_KEY_WEBAHOLICS",
+        "client_profile": "webaholics.json",
+        "reply_format": "webaholics_reply_formats.json",
+        "reply_followup_campaign_id": "TO_BE_ADDED"
     }
   }
 }

@@ -35,7 +35,44 @@ def bison_headers(api_key):
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
+def instantly_headers(api_key):
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
 
+
+def update_instantly_lead(lead_id, ai_result, api_key):
+    url = f"https://api.instantly.ai/api/v2/leads/{lead_id}"
+
+    payload = {
+        "custom_variables": {
+            "main_reply": ai_result.get("main_reply", ""),
+            "followup_1": ai_result.get("followup_1", ""),
+            "followup_2": ai_result.get("followup_2", ""),
+            "followup_3": ai_result.get("followup_3", ""),
+            "followup_4": ai_result.get("followup_4", ""),
+            "followup_5": ai_result.get("followup_5", ""),
+            "followup_6": ai_result.get("followup_6", ""),
+            "reply_intent": ai_result.get("intent", ""),
+            "reply_confidence": str(ai_result.get("confidence", ""))
+        },
+        "status": "FUP1"
+    }
+
+    response = requests.patch(
+        url,
+        headers=instantly_headers(api_key),
+        json=payload
+    )
+
+    log(f"Instantly lead update: {response.status_code}")
+
+    try:
+        return response.json()
+    except Exception:
+        return response.text
 
 def load_json_file(path):
     with open(path, "r") as f:
