@@ -662,6 +662,20 @@ def process_instantly_reply(payload):
     else:
         log("No reply_to_uuid found. Skipping reply send.")
 
+def sender_name_from_email(email):
+    name = email.split("@")[0]
+    name = name.replace(".", " ").replace("_", " ").replace("-", " ")
+    return " ".join(word.capitalize() for word in name.split())
+
+sender_email = payload.get("from_email", "")
+
+sender_name = sender_name_from_email(sender_email)
+website = "https://www.webaholics.ai"
+
+if ai_result.get("main_reply"):
+    ai_result["main_reply"] = ai_result["main_reply"].strip()
+    ai_result["main_reply"] += f"\n\nKind regards,\n{sender_name}\n{website}"
+
     log("Updating Instantly lead variables...")
     update_result = update_instantly_lead(
         lead_id=lead_id,

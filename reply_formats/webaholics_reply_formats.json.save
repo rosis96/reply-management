@@ -46,8 +46,7 @@
   "main_reply_formats": {
     "positive_share_more_info": {
       "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
-      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} generate more qualified inquiries and improve how leads move from traffic to booked conversations.\n\nWe do this by connecting PPC, SEO, landing pages, CRM follow-up, reporting, and automation into one growth system. The goal is not to add another vendor or dashboard, but to make it easier to see what is working and improve conversion flow.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_times_grouped}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}",
-"signature_rule": "Every main_reply must end with a clear CTA/question, then exactly one blank line, then Kind regards, then {{sending_account_name}}, then {{website}}. Never create large blank gaps between paragraphs. Use short paragraphs with only one blank line between them."
+      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} generate more qualified inquiries and improve how leads move from traffic to booked conversations.\n\nWe do this by connecting PPC, SEO, landing pages, CRM follow-up, reporting, and automation into one growth system. The goal is not to add another vendor or dashboard, but to make it easier to see what is working and improve conversion flow.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_times_grouped}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"nt_name}}\n{{website}}. Never create large blank gaps between paragraphs. Use short paragraphs with only one blank line between them."
     },
     "positive_with_context": {
       "intent": "Prospect says yes and adds business context, humor, objection, or concern.",
@@ -68,7 +67,6 @@
       "max_words": 80,
       "signature_required": false,
       "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn’t see a confirmation come through. Let’s get something on the calendar so we don’t lose momentum.\n\nWe can do {{previous_proposed_times_grouped}}. Do any of those work for you? If not, I’m happy to adjust around your schedule.\n\nBest,"
-      
     },
     "followup_2": {
       "send_after": "2 working days after followup_1",
