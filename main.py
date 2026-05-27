@@ -640,7 +640,7 @@ def process_instantly_reply(payload):
       email=email,
       campaign_id=campaign_id,
       api_key=instantly_api_key
-)
+    )
 
     reply_text = payload.get("reply_text", "")
 
@@ -660,10 +660,29 @@ def process_instantly_reply(payload):
     reply_format = load_json_file("reply_formats/webaholics_reply_formats.json")
 
     ai_result = generate_ai_reply(
-      reply_format,
-      client_profile,
-      thread
-)
+        client_profile,
+        reply_format,
+        thread
+    )
+
+    reply_to_uuid = get_latest_instantly_email_id(
+        email=email,
+        campaign_id=campaign_id,
+        api_key=instantly_api_key
+    )
+
+    if reply_to_uuid:
+        log("Sending Instantly main reply...")
+
+        send_result = send_instantly_reply(
+            reply_to_uuid=reply_to_uuid,
+            message=ai_result.get("main_reply", ""),
+            api_key=instantly_api_key
+        )
+
+        log(f"Instantly send result: {send_result}")
+    else:
+        log("No reply_to_uuid found. Skipping reply send.")
 
     log("Updating Instantly lead variables...")
 
@@ -703,5 +722,3 @@ async def instantly_reply_webhook(request: Request, background_tasks: Background
         "success": True,
         "message": "Instantly reply received"
     }
-    process_reply(20470, "Insight Media Labs")
-    return {"success": True, "message": "Test completed"}
