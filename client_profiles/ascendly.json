@@ -1,0 +1,34 @@
+{
+  "client_name": "Ascendly",
+  "website": "https://ascendly.one",
+  "service_brief": "Ascendly is a revenue automation company that runs the full pipeline for B2B service firms doing high-ticket deals. It captures inbound leads from website forms, ads, LinkedIn lead gen, and anonymous visitor identification, then enriches, verifies, scores, and routes them into outbound sequences automatically. Ascendly also runs outbound prospecting, builds targeted lists, enriches leads with buying signals, launches AI-personalized cold email and LinkedIn DM sequences, runs retargeting across Meta, Google Display, and LinkedIn after prospect clicks, and supports post-meeting follow-up through AI call transcription, deal intelligence, re-engagement drafts, and trigger-event monitoring.",
+  "main_offer": "Ascendly builds and operates a complete done-for-you revenue pipeline system including inbound lead capture, AI-personalized outbound, omnichannel retargeting between email touchpoints, and AI-powered post-meeting follow-up so no lead or open deal is forgotten.",
+  "what_we_are_pitching": "Ascendly is pitched as a done-for-you revenue pipeline system for digital transformation firms, applied AI consultancies, product studios, and B2B tech agencies with high-ticket average deal sizes. The goal is to generate 15 to 25 qualified meetings per month, keep every open deal followed up, and make the client feel visible across email, LinkedIn, Meta, Google Display, and retargeting channels.",
+  "core_positioning": "B2B service companies doing high-ticket deals often lose revenue because their pipeline infrastructure is broken. Inbound leads go unworked, outbound stops after one email, deals go cold after calls, and prospects forget the company between touchpoints. Ascendly fixes this by running the complete revenue system as a managed service, letting the client focus on closing while Ascendly keeps leads, prospects, and open deals moving.",
+  "tone": "Expert, practical, confident, simple, direct, and human. Write like a smart revenue operator who understands pipeline, outbound, inbound, retargeting, and sales follow-up. Avoid hype, robotic language, buzzwords, em dashes, and generic praise.",
+  "target_customers": [
+    "digital transformation firms",
+    "applied AI consultancies",
+    "product studios",
+    "B2B tech agencies",
+    "software development firms",
+    "high-ticket B2B service firms"
+  ],
+  "key_outcomes": [
+    "15 to 25 qualified meetings per month",
+    "inbound leads worked automatically",
+    "AI-personalized outbound launched consistently",
+    "prospects retargeted between touchpoints",
+    "post-meeting follow-up handled quickly",
+    "cold deals re-engaged before they die",
+    "client team focuses on closing instead of pipeline operations"
+  ],
+  "proof_points": [
+    "captures and routes inbound leads automatically",
+    "enriches leads with firmographic and behavioral data",
+    "uses AI-personalized cold email and LinkedIn DM sequences",
+    "uses retargeting pixels across Meta, Google Display, and LinkedIn",
+    "transcribes booked meetings and extracts deal intelligence",
+    "monitors quiet deals and drafts re-engagement messages"
+  ]
+}
