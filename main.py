@@ -198,19 +198,16 @@ TASK:
 Write the immediate reply we should send now and generate 5 future follow-ups.
 
 RULES:
-- Sound human.
-- Do not sound robotic.
-- Do not over-explain.
-- Match the prospect's tone.
-- Continue from the actual thread.
-- Keep main_reply under 90 words.
-- Use proper paragraph spacing.
-- Never write the email as one long paragraph.
-- Use a soft CTA.
-- Do not use em dashes.
-- Do not invent facts.
-- If the prospect is clearly asking to unsubscribe, main_reply should be empty and intent should be "unsubscribe".
-- If the prospect is automated, out of office, wrong person, unclear, risky, or needs manual judgment, mark human_review_needed true.
+- Sound human
+- Do not sound robotic and remove em dashes while replying
+- Do not over-explain
+- Match the prospect's tone
+- Continue from the actual thread
+- Keep main_reply under 100 words
+- Use short paragraphs
+- Use only SINGLE empty line between paragraphs
+- Never add double blank lines
+- Keep formatting compact and readable
 
 Return ONLY valid JSON:
 
@@ -336,6 +333,8 @@ def process_reply(lead_id, workspace_name):
     reply_followup_campaign_id = workspace["reply_followup_campaign_id"]
 
     client_profile = load_json_file(f"client_profiles/{workspace['client_profile']}")
+    sender_name = workspace.get("sender_name", "")
+    website = workspace.get("website", "")
     reply_format = load_json_file(f"reply_formats/{workspace['reply_format']}")
 
     log("Fetching replies...")
@@ -371,7 +370,11 @@ def process_reply(lead_id, workspace_name):
     thread = build_thread(sent_emails, valid_replies)
 
     log("Generating AI reply + followups...")
+   
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
+
+    if ai_result.get("main_reply"):
+        ai_result["main_reply"] += f"\n\nBest,\n{sender_name}\n{website}"
 
     if ai_result.get("intent") == "unsubscribe":
         log("Unsubscribe detected. Not sending.")
