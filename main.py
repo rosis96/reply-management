@@ -527,6 +527,7 @@ def test_run():
 
 def process_instantly_reply(payload):
     log("Processing Instantly reply webhook...")
+    log(json.dumps(payload, indent=2))
 
     workspace_name = "Webaholics"
 
