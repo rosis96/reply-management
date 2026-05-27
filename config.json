@@ -1,9 +1,22 @@
 {
   "workspaces": {
     "Insight Media Labs": {
+      "api_key_env": "BISON_KEY_INSIGHTGEO",
       "reply_followup_campaign_id": 11,
       "client_profile": "insightgeo.json",
       "reply_format": "insightgeo_reply_formats.json"
+    },
+    "Ascendly": {
+      "api_key_env": "BISON_KEY_ASCENDLY",
+      "reply_followup_campaign_id": 14,
+      "client_profile": "ascendly.json",
+      "reply_format": "ascendly_reply_formats.json"
+    },
+    "Maildoso": {
+      "api_key_env": "BISON_KEY_MAILDOSO",
+      "reply_followup_campaign_id": 15,
+      "client_profile": "maildoso.json",
+      "reply_format": "maildoso_reply_formats.json"
     }
   }
 }

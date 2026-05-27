@@ -12,7 +12,6 @@ from fastapi import FastAPI, BackgroundTasks, Request
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-EMAILBISON_API_KEY = os.getenv("EMAILBISON_API_KEY")
 EMAILBISON_BASE_URL = os.getenv("EMAILBISON_BASE_URL", "").rstrip("/")
 HUMAN_REVIEW_WEBHOOK_URL = os.getenv("HUMAN_REVIEW_WEBHOOK_URL")
 
@@ -22,18 +21,17 @@ app = FastAPI()
 with open("config.json", "r") as f:
     CONFIG = json.load(f)
 
-
 REPLY_DELAY_SECONDS = 180
 PROCESSED_FILE = "logs/processed_replies.json"
 
 
 def log(message):
-    print(f"[{datetime.now()}] {message}")
+    print(f"[{datetime.now()}] {message}", flush=True)
 
 
-def bison_headers():
+def bison_headers(api_key):
     return {
-        "Authorization": f"Bearer {EMAILBISON_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
@@ -50,15 +48,19 @@ def save_log(filename, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
     return path
-def notify_human_review(lead_id, reply_id, thread, ai_result):
+
+
+def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
     if not HUMAN_REVIEW_WEBHOOK_URL:
         log("No HUMAN_REVIEW_WEBHOOK_URL set.")
-        return
+        return None
 
     payload = {
+        "workspace_name": workspace_name,
         "lead_id": lead_id,
         "reply_id": reply_id,
         "reason": ai_result.get("intent", "human_review_needed"),
+        "confidence": ai_result.get("confidence"),
         "ai_reply": ai_result.get("main_reply", ""),
         "thread": thread
     }
@@ -69,11 +71,12 @@ def notify_human_review(lead_id, reply_id, thread, ai_result):
             json=payload,
             timeout=15
         )
-
         log(f"Human review webhook sent: {response.status_code}")
-
+        return response.text
     except Exception as e:
         log(f"Human review webhook failed: {e}")
+        return None
+
 
 def load_processed_replies():
     os.makedirs("logs", exist_ok=True)
@@ -99,9 +102,9 @@ def save_processed_reply(reply_id):
         json.dump(processed, f, indent=2)
 
 
-def fetch_replies(lead_id):
+def fetch_replies(lead_id, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}/replies"
-    response = requests.get(url, headers=bison_headers())
+    response = requests.get(url, headers=bison_headers(api_key))
 
     if response.status_code != 200:
         log(f"Failed fetching replies: {response.text}")
@@ -110,9 +113,9 @@ def fetch_replies(lead_id):
     return response.json().get("data", [])
 
 
-def fetch_sent_emails(lead_id):
+def fetch_sent_emails(lead_id, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}/sent-emails"
-    response = requests.get(url, headers=bison_headers())
+    response = requests.get(url, headers=bison_headers(api_key))
 
     if response.status_code != 200:
         log(f"Failed fetching sent emails: {response.text}")
@@ -169,12 +172,24 @@ def get_latest_reply(replies):
     return replies[0]
 
 
-def generate_ai_reply(client_profile, thread):
+def format_email_for_bison(message):
+    if not message:
+        return ""
+
+    message = str(message).strip()
+    message = message.replace("\\n", "\n")
+    return message.replace("\n", "<br><br>")
+
+
+def generate_ai_reply(client_profile, reply_format, thread):
     prompt = f"""
 You are an expert outbound sales reply assistant.
 
 CLIENT PROFILE:
 {json.dumps(client_profile, indent=2)}
+
+REPLY FORMAT RULES:
+{json.dumps(reply_format, indent=2)}
 
 EMAIL THREAD:
 {json.dumps(thread, indent=2)}
@@ -183,17 +198,19 @@ TASK:
 Write the immediate reply we should send now and generate 5 future follow-ups.
 
 RULES:
-- Sound human
-- Do not sound robotic
-- Do not over-explain
-- Match the prospect's tone
-- Continue from the actual thread
-- Keep main_reply under 90 words
-- Use short paragraphs
-- Use a soft CTA
-- Do not invent facts
-- If the prospect is clearly asking to unsubscribe, reply should be empty and intent should be "unsubscribe"
-- If the prospect is automated/out of office/wrong person, mark human_review_needed true
+- Sound human.
+- Do not sound robotic.
+- Do not over-explain.
+- Match the prospect's tone.
+- Continue from the actual thread.
+- Keep main_reply under 90 words.
+- Use proper paragraph spacing.
+- Never write the email as one long paragraph.
+- Use a soft CTA.
+- Do not use em dashes.
+- Do not invent facts.
+- If the prospect is clearly asking to unsubscribe, main_reply should be empty and intent should be "unsubscribe".
+- If the prospect is automated, out of office, wrong person, unclear, risky, or needs manual judgment, mark human_review_needed true.
 
 Return ONLY valid JSON:
 
@@ -223,7 +240,7 @@ Return ONLY valid JSON:
     return json.loads(raw)
 
 
-def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email):
+def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/replies/{reply_id}/reply"
 
     payload = {
@@ -239,7 +256,7 @@ def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email):
         "inject_previous_email_body": True
     }
 
-    response = requests.post(url, headers=bison_headers(), json=payload)
+    response = requests.post(url, headers=bison_headers(api_key), json=payload)
 
     if response.status_code not in [200, 201]:
         log(f"Failed sending reply: {response.text}")
@@ -248,7 +265,7 @@ def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email):
     return response.json()
 
 
-def update_bison_lead_variables(lead_id, ai_result, latest_reply):
+def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}"
 
     full_name = latest_reply.get("from_name", "") or ""
@@ -274,7 +291,7 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply):
         ]
     }
 
-    response = requests.put(url, headers=bison_headers(), json=payload)
+    response = requests.put(url, headers=bison_headers(api_key), json=payload)
 
     if response.status_code not in [200, 201]:
         log(f"Failed updating lead variables: {response.text}")
@@ -283,14 +300,14 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply):
     return response.json()
 
 
-def attach_lead_to_followup_campaign(lead_id, campaign_id):
+def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key):
     url = f"{EMAILBISON_BASE_URL}/api/campaigns/{campaign_id}/leads/attach-leads"
 
     payload = {
         "lead_ids": [lead_id]
     }
 
-    response = requests.post(url, headers=bison_headers(), json=payload)
+    response = requests.post(url, headers=bison_headers(api_key), json=payload)
 
     if response.status_code not in [200, 201]:
         log(f"Failed attaching lead to campaign: {response.text}")
@@ -303,12 +320,26 @@ def process_reply(lead_id, workspace_name):
     log(f"Received job for lead {lead_id}. Waiting {REPLY_DELAY_SECONDS} seconds before replying.")
     time.sleep(REPLY_DELAY_SECONDS)
 
+    if workspace_name not in CONFIG["workspaces"]:
+        log(f"Unknown workspace: {workspace_name}")
+        return
+
     workspace = CONFIG["workspaces"][workspace_name]
+
+    api_key_env = workspace["api_key_env"]
+    workspace_bison_api_key = os.getenv(api_key_env)
+
+    if not workspace_bison_api_key:
+        log(f"Missing API key for workspace {workspace_name}. Expected env: {api_key_env}")
+        return
+
     reply_followup_campaign_id = workspace["reply_followup_campaign_id"]
+
     client_profile = load_json_file(f"client_profiles/{workspace['client_profile']}")
+    reply_format = load_json_file(f"reply_formats/{workspace['reply_format']}")
 
     log("Fetching replies...")
-    replies = fetch_replies(lead_id)
+    replies = fetch_replies(lead_id, workspace_bison_api_key)
 
     valid_replies = [
         r for r in replies
@@ -334,46 +365,74 @@ def process_reply(lead_id, workspace_name):
         return
 
     log("Fetching sent emails...")
-    sent_emails = fetch_sent_emails(lead_id)
+    sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key)
 
     log("Building thread...")
     thread = build_thread(sent_emails, valid_replies)
 
     log("Generating AI reply + followups...")
-    ai_result = generate_ai_reply(client_profile, thread)
-
-	
+    ai_result = generate_ai_reply(client_profile, reply_format, thread)
 
     if ai_result.get("intent") == "unsubscribe":
         log("Unsubscribe detected. Not sending.")
         save_log(f"unsubscribe_detected_{lead_id}_{reply_id}.json", {
             "lead_id": lead_id,
             "reply_id": reply_id,
+            "workspace_name": workspace_name,
             "thread": thread,
             "ai_result": ai_result
         })
         save_processed_reply(reply_id)
         return
 
+    if ai_result.get("human_review_needed") is True:
+        log("Human review needed. Not sending.")
+
+        notify_human_review(
+            lead_id=lead_id,
+            reply_id=reply_id,
+            workspace_name=workspace_name,
+            thread=thread,
+            ai_result=ai_result
+        )
+
+        save_log(f"human_review_needed_{lead_id}_{reply_id}.json", {
+            "lead_id": lead_id,
+            "reply_id": reply_id,
+            "workspace_name": workspace_name,
+            "thread": thread,
+            "ai_result": ai_result
+        })
+
+        save_processed_reply(reply_id)
+        return
+
     log("Sending immediate reply through EmailBison...")
     send_result = send_reply_to_bison(
         reply_id=reply_id,
-        message=ai_result["main_reply"].replace("\n", "<br><br>"),
+        message=format_email_for_bison(ai_result.get("main_reply", "")),
         sender_email_id=latest_reply["sender_email_id"],
         to_name=latest_reply["from_name"],
-        to_email=latest_reply["from_email_address"]
+        to_email=latest_reply["from_email_address"],
+        api_key=workspace_bison_api_key
     )
 
     if send_result:
         save_processed_reply(reply_id)
 
     log("Updating lead custom variables...")
-    update_result = update_bison_lead_variables(lead_id, ai_result, latest_reply)
+    update_result = update_bison_lead_variables(
+        lead_id=lead_id,
+        ai_result=ai_result,
+        latest_reply=latest_reply,
+        api_key=workspace_bison_api_key
+    )
 
     log("Attaching lead to reply follow-up campaign...")
     attach_result = attach_lead_to_followup_campaign(
         lead_id=lead_id,
-        campaign_id=reply_followup_campaign_id
+        campaign_id=reply_followup_campaign_id,
+        api_key=workspace_bison_api_key
     )
 
     final_log = {
