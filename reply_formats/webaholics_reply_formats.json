@@ -1,0 +1,153 @@
+{
+  "client_name": "Webaholics",
+  "website": "https://www.webaholics.ai/ppc-landing",
+  "formatting_rules": {
+    "max_reply_words": 100,
+    "preferred_reply_words": "60 to 80",
+    "use_line_breaks": true,
+    "no_one_line_replies": true,
+    "avoid": [
+      "em dashes",
+      "robotic phrases",
+      "generic compliments",
+      "long paragraphs",
+      "hype",
+      "buzzwords",
+      "vanity metrics as the main value"
+    ],
+    "meeting_time_humanization": {
+      "enabled": true,
+      "examples": [
+        "Monday around 10 AM, 11 AM, or noon",
+        "Tuesday around 11 AM, noon, or early afternoon",
+        "late morning or early afternoon",
+        "around noon or shortly after"
+      ]
+    },
+    "followup_signature": "Do not add sender name, initials, website, or full signature in follow-up copy."
+  },
+  "scheduling_rules": {
+    "meeting_window": "10:00 AM to 2:00 PM",
+    "minimum_days_after_reply_for_main_reply": 2,
+    "minimum_days_after_followup_send": 2,
+    "preferred_times": [
+      "10:00 AM",
+      "11:00 AM",
+      "noon",
+      "1:00 PM"
+    ],
+    "avoid_days": [
+      "Saturday",
+      "Sunday"
+    ],
+    "thursday_or_friday_logic": "If prospect replies Thursday or Friday, propose Monday or Tuesday next week.",
+    "proposal_style": "Whenever proposing times, suggest 2 working days and provide 2 to 3 time windows for each day in a natural human way. Example: Monday around 10 AM, 11 AM, or noon, or Tuesday around 11 AM, noon, or early afternoon."
+  },
+  "main_reply_formats": {
+    "positive_share_more_info": {
+      "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
+      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} generate more qualified inquiries and improve how leads move from traffic to booked conversations.\n\nWe do this by connecting PPC, SEO, landing pages, CRM follow-up, reporting, and automation into one growth system. The goal is not to add another vendor or dashboard, but to make it easier to see what is working and improve conversion flow.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_times_grouped}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+    },
+    "positive_with_context": {
+      "intent": "Prospect says yes and adds business context, humor, objection, or concern.",
+      "template": "Hey {{firstName}}, {{casual_response_to_prospect_comment}}\n\nThe idea is to help {{companyName}} improve lead quality, conversion flow, and visibility without separating ads, SEO, landing pages, and follow-up into disconnected pieces.\n\nWe do this by building one connected growth system across acquisition, conversion, tracking, CRM, and reporting. The goal is not more noise, but better-qualified inquiries and clearer revenue visibility.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_times_grouped}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+    },
+    "meeting_ready": {
+      "intent": "Prospect says let's meet, send times, book a call, calendar, happy to chat, or similar.",
+      "template": "Hey {{firstName}},\n\nI’d be glad to walk you through how Webaholics connects paid traffic, SEO, conversion-focused pages, CRM follow-up, and reporting into one growth system.\n\nI am available {{proposed_times_grouped}}. Let me know what works, and I will send the invitation.\n\nKind regards,\n{{sendingAccountName}}"
+    },
+    "pricing_question": {
+      "intent": "Prospect asks about pricing, cost, quote, package, budget, or rate.",
+      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let’s first figure out if, assuming there’s no pricing constraint, Webaholics would actually fit {{companyName}} and support the kind of growth you’re aiming for.\n\nTypically, we walk through where leads are coming from, where conversion is leaking, and whether PPC, SEO, landing pages, and automation could work better together.\n\nEither way, you’ll leave with a clearer view of where qualified inquiries may be getting missed.\n\nDoes {{proposed_times_grouped}} work?\n\nAnd no worries, you will not have to pay a single dollar just to get into the call.\n\nKind regards,\n{{sendingAccountName}}"
+    }
+  },
+  "followup_formats": {
+    "followup_1": {
+      "send_after": "1 working day after main reply",
+      "max_words": 80,
+      "signature_required": false,
+      "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn’t see a confirmation come through. Let’s get something on the calendar so we don’t lose momentum.\n\nWe can do {{previous_proposed_times_grouped}}. Do any of those work for you? If not, I’m happy to adjust around your schedule.\n\nBest,"
+    },
+    "followup_2": {
+      "send_after": "2 working days after followup_1",
+      "max_words": 90,
+      "signature_required": false,
+      "template": "{{firstName}}?\n\nI am still interested in learning if {{companyName}} is currently focused on improving lead quality and getting more qualified inquiries from the traffic already coming in.\n\nWebaholics helps by connecting PPC, SEO, landing pages, CRM follow-up, and reporting into one growth system instead of treating each channel separately.\n\nI’d be glad to share how this could work for {{companyName}}.\n\nDoes {{proposed_times_grouped}} work best for a quick call?\n\nBest,"
+    },
+    "followup_3": {
+      "send_after": "2 working days after followup_2",
+      "max_words": 100,
+      "signature_required": false,
+      "template": "Hi {{firstName}},\n\nWe build and run growth systems that let {{companyName}} attract better-fit traffic, convert more visitors into inquiries, track what is working, and improve follow-up after leads come in.\n\nI’d love to share more and see if we can lock in a time to chat. It would be great to hop on a quick Zoom call where I can walk you through the acquisition setup, landing page flow, tracking, and automation layer.\n\nI’m available {{proposed_times_grouped}}. If any of those work, I’ll send over a calendar invite.\n\nKind regards,"
+    },
+    "followup_4": {
+      "send_after": "3 working days after followup_3",
+      "max_words": 90,
+      "signature_required": false,
+      "template": "Hi {{firstName}}, we’ve heard from other business owners that growth gets messy when ads, SEO, websites, CRM, and reporting are all handled separately.\n\nSound familiar?\n\nImagine reducing wasted spend and missed inquiries by connecting acquisition, conversion, automation, and reporting into one system. Webaholics does that without adding more moving parts for your team.\n\nWould that fit what you are doing now? Let’s meet next week and decide what works best for {{companyName}}."
+    },
+    "followup_5": {
+      "send_after": "2 working days after followup_4",
+      "max_words": 80,
+      "signature_required": false,
+      "template": "Hey {{firstName}}, I am pitching the same thing here:\n\nWebaholics helps businesses turn traffic, landing pages, websites, CRM, and reporting into one connected lead generation system instead of scattered marketing activity.\n\nNot only that, we also help improve SEO visibility, PPC efficiency, lead tracking, and conversion flow so fewer qualified inquiries get missed.\n\nShould I just share my calendar link now?\n\nBest,"
+    },
+    "followup_6": {
+      "send_after": "2 working days after followup_5",
+      "max_words": 70,
+      "signature_required": false,
+      "template": "{{firstName}}?\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming Webaholics is not of interest to you for improving lead quality and conversion flow right now, is that right?\n\nEither way, let me know. Certainly don’t want to be a pest.\n\nThanks in advance,"
+    }
+  },
+  "intent_handling": {
+    "unsubscribe": {
+      "send_reply": false,
+      "action": "Do not send. Save log only."
+    },
+    "out_of_office_or_automated": {
+      "send_reply": false,
+      "action": "Do not send."
+    },
+    "human_review_needed": {
+      "send_reply": false,
+      "action": "Send human review alert."
+    },
+    "negative_not_interested": {
+      "send_reply": false,
+      "action": "Do not send unless a polite acknowledgement is clearly required."
+    },
+    "positive_interest": {
+      "send_reply": true,
+      "format": "positive_share_more_info"
+    },
+    "meeting_ready": {
+      "send_reply": true,
+      "format": "meeting_ready"
+    },
+    "pricing_question": {
+      "send_reply": true,
+      "format": "pricing_question"
+    }
+  },
+  "call_agenda_examples": [
+    "where {{companyName}} is currently getting traffic from",
+    "where leads may be dropping off before becoming inquiries",
+    "how PPC, SEO, landing pages, and CRM follow-up could work together",
+    "what Webaholics would build, run, and report on for {{companyName}}"
+  ],
+  "goal_examples": [
+    "generate more qualified inquiries",
+    "reduce wasted ad spend",
+    "improve landing page conversion",
+    "increase booked conversations",
+    "make lead tracking and follow-up simpler",
+    "build a more predictable customer acquisition system"
+  ],
+  "friction_removal_examples": [
+    "to add another vendor for your team to manage",
+    "to create more dashboards without clarity",
+    "to chase vanity metrics",
+    "to replace what is already working",
+    "to make growth operations more complicated"
+  ]
+}
