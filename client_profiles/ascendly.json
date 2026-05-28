@@ -1,34 +1,61 @@
 {
   "client_name": "Ascendly",
   "website": "https://ascendly.one",
-  "service_brief": "Ascendly is a revenue automation company that runs the full pipeline for B2B service firms doing high-ticket deals. It captures inbound leads from website forms, ads, LinkedIn lead gen, and anonymous visitor identification, then enriches, verifies, scores, and routes them into outbound sequences automatically. Ascendly also runs outbound prospecting, builds targeted lists, enriches leads with buying signals, launches AI-personalized cold email and LinkedIn DM sequences, runs retargeting across Meta, Google Display, and LinkedIn after prospect clicks, and supports post-meeting follow-up through AI call transcription, deal intelligence, re-engagement drafts, and trigger-event monitoring.",
-  "main_offer": "Ascendly builds and operates a complete done-for-you revenue pipeline system including inbound lead capture, AI-personalized outbound, omnichannel retargeting between email touchpoints, and AI-powered post-meeting follow-up so no lead or open deal is forgotten.",
-  "what_we_are_pitching": "Ascendly is pitched as a done-for-you revenue pipeline system for digital transformation firms, applied AI consultancies, product studios, and B2B tech agencies with high-ticket average deal sizes. The goal is to generate 15 to 25 qualified meetings per month, keep every open deal followed up, and make the client feel visible across email, LinkedIn, Meta, Google Display, and retargeting channels.",
-  "core_positioning": "B2B service companies doing high-ticket deals often lose revenue because their pipeline infrastructure is broken. Inbound leads go unworked, outbound stops after one email, deals go cold after calls, and prospects forget the company between touchpoints. Ascendly fixes this by running the complete revenue system as a managed service, letting the client focus on closing while Ascendly keeps leads, prospects, and open deals moving.",
-  "tone": "Expert, practical, confident, simple, direct, and human. Write like a smart revenue operator who understands pipeline, outbound, inbound, retargeting, and sales follow-up. Avoid hype, robotic language, buzzwords, em dashes, and generic praise.",
+  "service_brief": "Ascendly is a managed revenue pipeline company for B2B service firms selling high-ticket services. We help companies generate qualified sales meetings by combining inbound opportunity capture, anonymous website visitor identification, AI-personalized outbound campaigns, LinkedIn outreach, and multi-touch retargeting across Meta, Google Display, and LinkedIn. We also support post-meeting pipeline movement through AI-generated follow-up drafts, deal intelligence, re-engagement workflows, and trigger-event monitoring so fewer opportunities go cold.",
+  "main_offer": "Ascendly builds and operates a complete done-for-you revenue pipeline system including inbound lead capture, anonymous visitor identification, AI-personalized cold email outreach, LinkedIn outbound, retargeting between touchpoints, and AI-assisted deal follow-up so qualified opportunities keep moving.",
+  "what_we_are_pitching": "We help high-ticket B2B service firms generate 15 to 25 qualified meetings per month while ensuring inbound leads, outbound prospects, and open deals are consistently worked instead of forgotten. Ascendly runs the outbound execution, lead routing, qualification flow, retargeting visibility, and pipeline movement so the client team can focus on closing.",
+  "core_positioning": "Most B2B service companies do not lose revenue because they lack traffic or leads. They lose revenue because pipeline execution is inconsistent. Inbound leads go untouched, outbound stops too early, prospects forget the company between touchpoints, and deals quietly die after meetings. Ascendly fixes this by operating the revenue pipeline as a managed system while the client focuses on sales conversations and closing.",
+  "tone": "Expert, practical, confident, simple, direct, and human. Write like a smart revenue operator who understands outbound, inbound capture, retargeting, deliverability, sales conversations, and pipeline management. Avoid hype, robotic language, excessive buzzwords, em dashes, and generic praise.",
   "target_customers": [
     "digital transformation firms",
     "applied AI consultancies",
     "product studios",
     "B2B tech agencies",
     "software development firms",
+    "branding agencies",
+    "commercial renewable energy companies",
+    "energy efficiency companies",
+    "solar companies",
     "high-ticket B2B service firms"
   ],
   "key_outcomes": [
     "15 to 25 qualified meetings per month",
     "inbound leads worked automatically",
     "AI-personalized outbound launched consistently",
+    "website visitors identified and routed into outreach",
     "prospects retargeted between touchpoints",
-    "post-meeting follow-up handled quickly",
     "cold deals re-engaged before they die",
+    "more predictable sales pipeline",
     "client team focuses on closing instead of pipeline operations"
   ],
-  "proof_points": [
-    "captures and routes inbound leads automatically",
-    "enriches leads with firmographic and behavioral data",
-    "uses AI-personalized cold email and LinkedIn DM sequences",
-    "uses retargeting pixels across Meta, Google Display, and LinkedIn",
-    "transcribes booked meetings and extracts deal intelligence",
-    "monitors quiet deals and drafts re-engagement messages"
+  "what_we_do": [
+    "anonymous visitor identification",
+    "inbound lead capture and routing",
+    "AI-personalized cold email outreach",
+    "LinkedIn outbound campaigns",
+    "cold ICP list sourcing",
+    "lead enrichment and qualification",
+    "retargeting across Meta, Google Display, and LinkedIn",
+    "reply management",
+    "meeting qualification and booking",
+    "AI-assisted deal follow-up",
+    "deal re-engagement campaigns",
+    "deliverability and sending infrastructure management"
+  ],
+  "what_we_do_not_do": [
+    "generic bulk cold email blasts",
+    "random lead list selling",
+    "low-quality appointment setting",
+    "another SEO or ad service focused only on traffic",
+    "software-only DIY systems",
+    "unqualified meeting booking",
+    "one-off campaigns without pipeline structure"
+  ],
+  "positioning_lines": [
+    "The goal is not to add another SEO or ad effort just to bring in more visitors, but to ensure your existing marketing and sales efforts are utilized fully.",
+    "We help companies turn existing traffic and outbound activity into qualified sales conversations consistently.",
+    "Your team focuses on closing while Ascendly operates the pipeline infrastructure.",
+    "We build predictable pipeline systems instead of random outbound campaigns.",
+    "Ascendly helps B2B service firms stay visible across email, LinkedIn, Meta, Google Display, and retargeting touchpoints."
   ]
 }
