@@ -36,7 +36,7 @@
     "preferred_times": [
       "10:00 AM",
       "11:00 AM",
-      "12:00 PM",
+      "noon",
       "1:00 PM"
     ],
     "gap_between_options": "At least 1 hour",
@@ -50,19 +50,19 @@
   "main_reply_formats": {
     "positive_share_more_info": {
       "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
-      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} {{company_specific_goal}}.\n\nWe do this by {{how_insightgeo_helps}}. The goal is not {{friction_or_confusion_to_remove}}.\n\nI\u2019d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} {{company_specific_goal}}.\n\nWe do this by {{how_insightgeo_helps}}. The goal is not {{friction_or_confusion_to_remove}}.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
     },
     "positive_with_context": {
       "intent": "Prospect says yes and also shares context, humor, business details, concern, or comment.",
-      "template": "Hey {{firstName}}, {{casual_response_to_prospect_comment}}\n\nThe idea is to help {{companyName}} {{company_specific_goal}}.\n\nWe do this by {{how_insightgeo_helps}}. The goal is not {{friction_or_confusion_to_remove}}.\n\nI\u2019d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+      "template": "Hey {{firstName}}, {{casual_response_to_prospect_comment}}\n\nThe idea is to help {{companyName}} {{company_specific_goal}}.\n\nWe do this by {{how_insightgeo_helps}}. The goal is not {{friction_or_confusion_to_remove}}.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
     },
     "meeting_ready": {
       "intent": "Prospect says let's meet, book a call, send times, calendar, happy to chat, or similar.",
-      "template": "Hey {{firstName}},\n\nI\u2019d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works, and I will send the invitation.\n\nKind regards,\n{{sendingAccountName}}"
+      "template": "Hey {{firstName}},\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works, and I will send the invitation.\n\nKind regards,\n{{sendingAccountName}}"
     },
     "pricing_question": {
       "intent": "Prospect asks about pricing, cost, quote, package, budget, or rate.",
-      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let\u2019s first figure out if, assuming there\u2019s no pricing constraint, our approach would actually fit {{companyName}} and support the kind of scale and consistency you\u2019re aiming for.\n\nTypically, we walk through where {{companyName}} shows up in AI-assisted research, what competitors are being recommended, and where there may be gaps worth fixing.\n\nEither way, you\u2019ll leave with a clearer view of how visible {{companyName}} is when {{target_buyers}} search for {{relevant_solution_category}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?\n\nAnd no worries, you will not have to pay a single dollar just to get into the call.\n\nKind regards,\n{{sendingAccountName}}"
+      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let’s first figure out if, assuming there’s no pricing constraint, our approach would actually fit {{companyName}} and support the kind of scale and consistency you’re aiming for.\n\nTypically, we walk through where {{companyName}} shows up in AI-assisted research, what competitors are being recommended, and where there may be gaps worth fixing.\n\nEither way, you’ll leave with a clearer view of how visible {{companyName}} is when {{target_buyers}} search for {{relevant_solution_category}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?\n\nAnd no worries, you will not have to pay a single dollar just to get into the call.\n\nKind regards,\n{{sendingAccountName}}"
     },
     "generic_question": {
       "intent": "Prospect asks a question that does not fit pricing or meeting-ready intent.",
@@ -75,28 +75,28 @@
       "max_words": 80,
       "signature_required": false,
       "logic": "First-line question depends on what the main reply did. If more info was shared, ask if they had a chance to review it. If times were shared, ask if they checked their calendar.",
-      "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn\u2019t see a confirmation come through. Let\u2019s get something on the calendar so we don\u2019t lose momentum.\n\nWe can do {{previous_proposed_time_1}} or {{previous_proposed_time_2}}. Do either of those work for you? If not, I\u2019m happy to adjust around your schedule.\n\nBest,"
+      "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn’t see a confirmation come through. Let’s get something on the calendar so we don’t lose momentum.\n\nWe can do {{previous_proposed_time_1}} or {{previous_proposed_time_2}}. Do either of those work for you? If not, I’m happy to adjust around your schedule.\n\nBest,"
     },
     "followup_2": {
       "send_after": "2 working days after followup_1",
       "max_words": 90,
       "signature_required": false,
       "time_rule": "Propose times at least 2 working days after this follow-up is sent.",
-      "template": "{{firstName}}?\n\nI am still interested in learning if {{companyName}} is currently focused on {{goal_or_problem_we_solve}} and getting {{expected_result}}.\n\nWe\u2019ve helped teams understand where they show up in AI-assisted buyer research, which competitors are being recommended, and what needs to change to earn stronger visibility.\n\nI\u2019d be glad to share how {{call_value_2_to_3_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work best for a quick call?\n\nBest,"
+      "template": "{{firstName}}?\n\nI am still interested in learning if {{companyName}} is currently focused on {{goal_or_problem_we_solve}} and getting {{expected_result}}.\n\nWe’ve helped teams understand where they show up in AI-assisted buyer research, which competitors are being recommended, and what needs to change to earn stronger visibility.\n\nI’d be glad to share how {{call_value_2_to_3_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work best for a quick call?\n\nBest,"
     },
     "followup_3": {
       "send_after": "2 working days after followup_2",
       "max_words": 100,
       "signature_required": false,
       "time_rule": "Propose times at least 2 working days after this follow-up is sent.",
-      "template": "Hi {{firstName}},\n\nWe help companies understand and improve how AI tools describe, compare, and recommend them so {{companyName}} can {{company_specific_outcome_2_to_3_items}} and scale {{prospect_service_or_solution}} with stronger buyer discovery.\n\nI\u2019d love to share more and see if we can lock in a time to chat. It would be great to hop on a quick Zoom call where I can walk you through live visibility checks, competitor examples, and the optimization plan.\n\nI\u2019m available {{proposed_time_1}} or {{proposed_time_2}}. If either works, I\u2019ll send over a calendar invite.\n\nKind regards,"
+      "template": "Hi {{firstName}},\n\nWe help companies understand and improve how AI tools describe, compare, and recommend them so {{companyName}} can {{company_specific_outcome_2_to_3_items}} and scale {{prospect_service_or_solution}} with stronger buyer discovery.\n\nI’d love to share more and see if we can lock in a time to chat. It would be great to hop on a quick Zoom call where I can walk you through live visibility checks, competitor examples, and the optimization plan.\n\nI’m available {{proposed_time_1}} or {{proposed_time_2}}. If either works, I’ll send over a calendar invite.\n\nKind regards,"
     },
     "followup_4": {
       "send_after": "3 working days after followup_3",
       "max_words": 90,
       "signature_required": false,
       "time_rule": "If proposing next week, use working days only.",
-      "template": "Hi {{firstName}}, we\u2019ve heard from other {{persona}} that {{common_problem}}.\n\nSound familiar?\n\nImagine improving {{visibility_gap_or_buyer_discovery_issue}} without guessing what AI tools are saying about {{companyName}}. Teams are turning to InsightGEO to track recommendations, competitor mentions, and AI-generated positioning without adding another heavy marketing workflow.\n\nWould that fit what you are doing now? Let\u2019s meet next week and decide what works best for {{companyName}}."
+      "template": "Hi {{firstName}}, we’ve heard from other {{persona}} that {{common_problem}}.\n\nSound familiar?\n\nImagine improving {{visibility_gap_or_buyer_discovery_issue}} without guessing what AI tools are saying about {{companyName}}. Teams are turning to InsightGEO to track recommendations, competitor mentions, and AI-generated positioning without adding another heavy marketing workflow.\n\nWould that fit what you are doing now? Let’s meet next week and decide what works best for {{companyName}}."
     },
     "followup_5": {
       "send_after": "2 working days after followup_4",
@@ -108,7 +108,7 @@
       "send_after": "2 working days after followup_5",
       "max_words": 70,
       "signature_required": false,
-      "template": "{{firstName}}?\n\nI\u2019ve reached out a few times but haven\u2019t heard back, so I\u2019m assuming InsightGEO is not of interest to you in exploring AI search visibility right now, is that right?\n\nEither way, let me know. Certainly don\u2019t want to be a pest.\n\nThanks in advance,"
+      "template": "{{firstName}}?\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming InsightGEO is not of interest to you in exploring AI search visibility right now, is that right?\n\nEither way, let me know. Certainly don’t want to be a pest.\n\nThanks in advance,"
     }
   },
   "formatting_rules": {
@@ -127,6 +127,27 @@
         "Tuesday morning or Wednesday afternoon"
       ]
     }
+  },
+  "placeholder_explanations": {
+    "{{firstName}}": "Prospect's first name.",
+    "{{companyName}}": "Prospect's company name.",
+    "{{sendingAccountName}}": "Sender's first name.",
+    "{{website}}": "https://www.insightgeo.ai",
+    "{{target_buyers}}": "Target demographics or buyer ICP.",
+    "{{relevant_solution_category}}": "The industrial or service category matching the target buyer market.",
+    "{{company_specific_goal}}": "Derived from goal_examples list mapping to the business sector.",
+    "{{how_insightgeo_helps}}": "Derived from the service_brief and main_offer text strings.",
+    "{{friction_or_confusion_to_remove}}": "Derived from friction_removal_examples data context.",
+    "{{call_agenda_3_to_4_items}}": "3 or 4 points explicitly drawn from the call_agenda_examples array.",
+    "{{contextual_check_question}}": "Short contextual variation questioning if they saw the previous info or checked schedules.",
+    "{{goal_or_problem_we_solve}}": "E.g., tracking AI visibility gaps or securing AI-assisted shortlists.",
+    "{{expected_result}}": "E.g., higher inclusion frequencies inside ChatGPT or Claude buyer selections.",
+    "{{call_value_2_to_3_items}}": "Key value items demonstrating tangible visibility audit steps.",
+    "{{company_specific_outcome_2_to_3_items}}": "Strategic positioning outcomes relevant to the company.",
+    "{{prospect_service_or_solution}}": "The primary services or solutions sold by the prospect's company.",
+    "{{persona}}": "The targeted job titles (e.g., CMOs, VPs of Marketing, Growth Directors).",
+    "{{common_problem}}": "A known industry pain point regarding dark social, untracked attribution, or hidden buyer journeys.",
+    "{{visibility_gap_or_buyer_discovery_issue}}": "Unmonitored competitive references inside LLM outputs."
   },
   "intent_handling": {
     "unsubscribe": {

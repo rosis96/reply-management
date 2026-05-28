@@ -158,13 +158,17 @@ def extract_email_from_anything(value):
 
 
 def extract_name_from_anything(value):
+    invalid_names = {"on", "from", "sent", "re", "fw", "fwd", "hey", "hello"}
+
     if not value:
         return ""
 
     if isinstance(value, dict):
         name = value.get("name") or value.get("full_name") or value.get("sender_name")
         if name and isinstance(name, str):
-            return name.strip().split(" ")[0].title()
+            clean_name = name.strip().split(" ")[0].title()
+            if clean_name.lower() not in invalid_names:
+                return clean_name
 
         email = extract_email_from_anything(value)
         return sender_name_from_email(email)
@@ -175,7 +179,9 @@ def extract_name_from_anything(value):
     if name_match:
         name = name_match.group(1).strip().strip('"').strip("'")
         if name:
-            return name.split(" ")[0].title()
+            clean_name = name.split(" ")[0].title()
+            if clean_name.lower() not in invalid_names:
+                return clean_name
 
     email = extract_email_from_anything(value)
     return sender_name_from_email(email)
@@ -193,7 +199,13 @@ def sender_name_from_email(email):
     if not local:
         return ""
 
-    return local.split(" ")[0].title()
+    name = local.split(" ")[0].title()
+
+    invalid_names = {"on", "from", "sent", "re", "fw", "fwd", "hey", "hello"}
+    if name.lower() in invalid_names:
+        return ""
+
+    return name
 
 
 def get_sender_email_from_sent_emails(sent_emails):
@@ -251,27 +263,21 @@ def strip_existing_signature(message):
     message = normalize_email_spacing(message)
 
     patterns = [
-        r"\n+(Best|Kind regards|Regards|Thanks|Thank you),?\s*\n.*$",
+        r"\n+(Best|Best regards|Kind regards|Regards|Warm regards|Thanks|Thanks in advance|Thank you|Sincerely|Cheers),?\s*\n.*$",
         r"\n+\{\{sendingAccountName\}\}.*$",
-        r"\n+\{\{website\}\}.*$"
+        r"\n+\{\{sending_account_name\}\}.*$",
+        r"\n+\{\{website\}\}.*$",
+        r"\n+https?://.*$"
     ]
 
     for pattern in patterns:
         message = re.sub(pattern, "", message, flags=re.IGNORECASE | re.DOTALL).strip()
 
-    return message
+    return normalize_email_spacing(message)
 
 
 def add_signature(message, sender_name, website):
-    message = strip_existing_signature(message)
-
-    if not sender_name:
-        sender_name = "Team"
-
-    if website:
-        return f"{message}\n\nKind regards,\n{sender_name}\n{website}"
-
-    return f"{message}\n\nKind regards,\n{sender_name}"
+    return strip_existing_signature(message)
 
 
 def generate_ai_reply(client_profile, reply_format, thread):
@@ -306,8 +312,10 @@ RULES:
 - Keep formatting compact and readable
 - Do not invent facts
 - Main reply must end with a clear CTA or question
-- Do not add the sender's signature yourself
-- Do not add Best, Kind regards, sender name, or website yourself
+- ABSOLUTELY NO CLOSINGS OR SIGNATURES.
+- Do not write Best, Best regards, Kind regards, Regards, Warm regards, Thanks, Thanks in advance, Thank you, Sincerely, Cheers, sender name, initials, website, or any signature.
+- Stop immediately after the final CTA/question/sentence.
+- The sending platform/account appends signatures dynamically.
 - If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
 - If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
 
@@ -333,8 +341,14 @@ Return ONLY valid JSON:
                 model="gpt-4.1-mini",
                 temperature=0.4,
                 messages=[
-                    {"role": "system", "content": "Return only valid JSON. No markdown."},
-                    {"role": "user", "content": prompt}
+                    {
+                        "role": "system",
+                        "content": "Return only valid JSON. No markdown. Never add Best, Regards, Kind regards, sender names, initials, websites, or signatures. Stop right after the CTA or final message statement."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
                 ]
             )
 

@@ -1,13 +1,11 @@
 {
   "client_name": "Ascendly",
   "website": "https://ascendly.one",
-
   "formatting_rules": {
     "main_reply_word_count": "Follow each intent-specific word count.",
     "followup_word_count": "Follow each follow-up-specific max_words.",
     "use_line_breaks": true,
     "no_one_line_replies": true,
-
     "avoid": [
       "em dashes",
       "robotic phrases",
@@ -16,12 +14,9 @@
       "hype",
       "buzzwords"
     ],
-
     "signature_rule": "Do not add sender name, initials, website, Best, Kind regards, or any full signature in AI-generated replies. Signature is added dynamically by the system.",
-
     "meeting_time_humanization": {
       "enabled": true,
-
       "examples": [
         "around 10 AM, 11 AM, or noon",
         "late morning or early afternoon",
@@ -30,261 +25,126 @@
       ]
     }
   },
-
   "scheduling_rules": {
     "meeting_window": "10:00 AM to 2:00 PM",
-
     "minimum_days_after_reply_for_main_reply": 2,
-
     "minimum_days_after_followup_send": 2,
-
     "preferred_times": [
       "10:00 AM",
       "11:00 AM",
       "12:00 PM",
       "1:00 PM"
     ],
-
     "avoid_days": [
       "Saturday",
       "Sunday"
     ],
-
     "thursday_or_friday_logic": "If prospect replies Thursday or Friday, propose Monday or Tuesday next week. If prospect replies Monday, propose Wednesday or Thursday.",
-
     "proposal_style": "Whenever proposing times, suggest 2 working days and provide 2 to 3 time windows for each day in a natural human way. Example: Monday around 10 AM, 11 AM, or noon, or Tuesday around 11 AM, noon, or early afternoon. Use natural terms like noon, afternoon, early afternoon instead of rigid timestamps whenever appropriate."
   },
-
   "main_reply_formats": {
-
     "positive_share_more_info": {
-
       "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
-
       "word_count": "160-180",
-
-      "template": "Hey {{firstName}},\n\nThe goal is to {{ultimate_business_outcome_you_help_them_achieve}}.\n\nWe do this by optimizing your inbound flow and running outbound campaigns. We work on your existing lead flow, and if there are any of your ideal prospects visiting your website or ad landing pages but not filling out a form or contacting your team, we identify those companies, route them into personalized email campaigns within minutes, and increase your booked calls. Alongside that, we also source cold lists of your ICPs and run highly targeted outbound campaigns in parallel.\n\nThe goal is not to add another SEO or ad effort to bring in more visitors, but to ensure your existing resources and marketing efforts are utilized at full capacity, driving 10–20 qualified sales conversations each month.\n\nI’d be glad to walk you through {{3_to_4_relevant_call_agenda_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.",
-
-      "placeholder_explanations": {
-
-        "{{firstName}}": "The prospect’s first name.",
-
-        "{{ultimate_business_outcome_you_help_them_achieve}}": {
-          "description": "The high-level business result they actually care about.",
-
-          "examples": [
-            "build a more predictable pipeline of enterprise buyers",
-            "generate more qualified conversations with franchise operators",
-            "create consistent meetings without relying only on referrals",
-            "get in front of high-intent SaaS decision-makers"
-          ]
-        },
-
-        "{{3_to_4_relevant_call_agenda_items}}": {
-          "description": "Specific things that make the call feel valuable and concrete.",
-
-          "examples": [
-            "how the visitor identification system works",
-            "examples of outbound campaigns in their industry",
-            "what messaging angles are currently converting",
-            "realistic meeting volume expectations",
-            "deliverability and infrastructure setup",
-            "how qualification and booking are handled"
-          ]
-        },
-
-        "{{proposed_time_1}} / {{proposed_time_2}}": {
-          "description": "Specific meeting slots.",
-
-          "examples": [
-            "Thursday at 11 AM, Noon, or 1 PM",
-            "Friday at 10 AM, Noon, or 1 PM"
-          ]
-        },
-
-        "{{sendingAccountName}}": {
-          "description": "Usually Ascendly sender first name."
-        },
-
-        "{{website}}": {
-          "description": "Usually https://ascendly.one"
-        }
-      }
+      "template": "Hey {{firstName}},\n\nThe goal is to {{ultimate_business_outcome_you_help_them_achieve}}.\n\nWe do this by optimizing your inbound flow and running outbound campaigns. We work on your existing lead flow, and if there are any of your ideal prospects visiting your website or ad landing pages but not filling out a form or contacting your team, we identify those companies, route them into personalized email campaigns within minutes, and increase your booked calls. Alongside that, we also source cold lists of your ICPs and run highly targeted outbound campaigns in parallel.\n\nThe goal is not to add another SEO or ad effort to bring in more visitors, but to ensure your existing resources and marketing efforts are utilized at full capacity, driving 10–20 qualified sales conversations each month.\n\nI’d be glad to walk you through {{3_to_4_relevant_call_agenda_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
     },
-
     "positive_with_context": {
-
       "intent": "Prospect says yes and adds context, humor, concern, opinion, or business detail.",
-
       "word_count": "160-180",
-
       "template": "Hey {{firstName}},\n\n{{casual_response_to_prospect_comment}}\n\nThe goal is to help {{companyName}} create a more predictable pipeline of qualified sales conversations without relying entirely on referrals, inconsistent inbound, or manual outreach.\n\nWe do this by optimizing your existing lead flow and running highly targeted outbound campaigns in parallel. If ideal prospects visit your website or landing pages without contacting your team, we identify those companies and route them into personalized outreach quickly while also sourcing and targeting cold ICP lists through outbound email campaigns.\n\nThe goal is not to add another SEO or ad effort to bring in more visitors, but to ensure your current marketing and sales efforts are utilized fully, driving 10–20 qualified sales conversations each month.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
     },
-
     "meeting_ready": {
-
       "intent": "Prospect says let’s meet, send times, book a call, happy to chat, calendar, or similar.",
-
       "word_count": "60-90",
-
       "template": "Hey {{firstName}},\n\nPerfect. I’d be glad to walk you through how Ascendly helps companies turn existing traffic and outbound into qualified sales conversations without adding more tools or internal sales overhead.\n\nWe’ll cover how visitor identification works, how we structure personalized outbound campaigns, what kind of messaging is converting right now, and what realistic meeting flow could look like for {{companyName}}.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works best and I will send the invitation."
     },
-
     "pricing_question": {
-
       "intent": "Prospect asks about pricing, quote, package, rates, budget, or cost.",
-
       "word_count": "140-170",
-
       "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let’s first figure out if, assuming there’s no pricing constraint, if our approach would actually fit {{companyName}} and support the kind of pipeline consistency you are aiming for.\n\nWhat you should expect is, we structure our pricing either as a monthly management engagement or a lighter optimization/audit project first, depending on how hands-on you want us to be after the initial review.\n\nUsually, we look at how qualified opportunities are currently coming in, where potential conversations are being lost, and whether combining visitor identification with targeted outbound could help create a more controlled flow of sales meetings.\n\nThe goal is not to add another marketing expense, but to make sure your existing traffic, campaigns, and outbound efforts are producing more qualified conversations consistently.\n\nI’d be glad to walk you through how this works, examples from similar campaigns, and what realistic meeting volume could look like for your market.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?"
     }
   },
-
   "followups": {
-
     "followup_1": {
-
       "send_after": "1 working day after main reply",
-
       "max_words": 80,
-
       "template": "Hey {{firstName}},\n\n{{light_contextual_reference_or_question}}\n\nI shared a couple of times last time but never saw a confirmation come through, so I wanted to check back before the conversation goes cold.\n\nThe goal here is simply to see whether {{companyName}} could benefit from turning more existing traffic and outbound activity into qualified sales conversations consistently.\n\nDoes {{previous_proposed_time_1}} or {{previous_proposed_time_2}} still work for you? If not, happy to adjust around your schedule."
     },
-
     "followup_2": {
-
       "send_after": "2 working days after followup_1",
-
       "max_words": 90,
-
       "template": "Hey {{firstName}},\n\nStill interested in learning whether {{companyName}} is currently focused on creating a more predictable pipeline of qualified sales conversations.\n\nAscendly helps companies maximize existing marketing and outbound efforts by identifying missed opportunities from inbound traffic while also running highly targeted outbound campaigns in parallel.\n\nThe goal is not to add another marketing layer, but to ensure current efforts are utilized fully and consistently generate qualified conversations.\n\nWould {{proposed_time_1}} or {{proposed_time_2}} work for a quick conversation?"
     },
-
     "followup_3": {
-
       "send_after": "2 working days after followup_2",
-
       "max_words": 100,
-
       "template": "Hey {{firstName}},\n\nWanted to circle back because I genuinely think there may be an opportunity for {{companyName}} to generate more qualified conversations without increasing ad spend or relying entirely on referrals.\n\nWe help companies identify ideal prospects already interacting with their website or campaigns, route them into personalized outreach quickly, and combine that with targeted outbound campaigns built around your ICP.\n\nI’d be glad to walk you through the system, campaign structure, messaging approach, and what kind of meeting flow could realistically make sense for your market.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?"
     },
-
     "followup_4": {
-
       "send_after": "3 working days after followup_3",
-
       "max_words": 90,
-
       "template": "Hey {{firstName}},\n\nMost companies do not struggle because they lack traffic or lead sources.\n\nUsually, the issue is that existing opportunities are never fully captured, qualified, or re-engaged consistently.\n\nThat is exactly where Ascendly fits in. We help companies turn existing inbound activity and outbound efforts into a more controlled pipeline of qualified sales conversations.\n\nCurious if that lines up with what {{companyName}} is trying to improve right now?\n\nHappy to connect next week if it makes sense."
     },
-
     "followup_5": {
-
       "send_after": "2 working days after followup_4",
-
       "max_words": 80,
-
       "template": "Hey {{firstName}},\n\nAt the core, Ascendly helps companies create a more predictable sales pipeline by combining personalized outbound campaigns with inbound opportunity capture.\n\nThe idea is not to generate more random traffic, but to make sure fewer qualified opportunities slip through the cracks while driving more sales conversations consistently.\n\nShould I just send over my calendar options and let you decide if a quick conversation makes sense?"
     },
-
     "followup_6": {
-
       "send_after": "2 working days after followup_5",
-
       "max_words": 70,
-
       "template": "Hey {{firstName}},\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming improving pipeline consistency is probably not a priority for {{companyName}} right now, is that fair?\n\nEither way, appreciate the time and certainly do not want to be a pest."
     }
   },
-
   "placeholder_explanations": {
-
     "{{firstName}}": "Prospect first name.",
-
     "{{companyName}}": "Prospect company name.",
-
-    "{{light_contextual_reference_or_question}}": {
-      "description": "A short contextual opener tied to the previous conversation.",
-
-      "examples": [
-        "enjoyed your point about referrals",
-        "still thinking about your comment on growth",
-        "curious if this is still on your radar",
-        "wanted to follow up on the SEO conversation"
-      ]
-    },
-
-    "{{previous_proposed_time_1}} / {{previous_proposed_time_2}}": {
-      "description": "The exact time slots proposed previously.",
-
-      "examples": [
-        "Thursday at 11 AM",
-        "Friday at Noon ET"
-      ]
-    },
-
-    "{{proposed_time_1}} / {{proposed_time_2}}": {
-      "description": "Fresh meeting times.",
-
-      "examples": [
-        "Tuesday at 10 AM",
-        "Wednesday at 1 PM PST"
-      ]
-    },
-
-    "{{sendingAccountName}}": {
-      "description": "Usually: Rosis"
-    }
+    "{{targetBuyerPersona}}": "The ideal job role or demographic targeted by the client campaigns.",
+    "{{ultimate_business_outcome_you_help_them_achieve}}": "The high-level business result they care about.",
+    "{{3_to_4_relevant_call_agenda_items}}": "Specific things that make the call feel valuable and concrete.",
+    "{{light_contextual_reference_or_question}}": "A short contextual opener tied to the previous conversation.",
+    "{{previous_proposed_time_1}} / {{previous_proposed_time_2}}": "The exact time slots proposed previously.",
+    "{{proposed_time_1}} / {{proposed_time_2}}": "Fresh meeting times.",
+    "{{sendingAccountName}}": "Usually: Rosis"
   },
-
   "intent_handling": {
-
     "unsubscribe": {
       "send_reply": false,
       "action": "Do not send. Save log only."
     },
-
     "out_of_office_or_automated": {
       "send_reply": false,
       "action": "Do not send."
     },
-
     "human_review_needed": {
       "send_reply": false,
       "action": "Send human review alert."
     },
-
     "negative_not_interested": {
       "send_reply": false,
       "action": "Do not send unless a polite acknowledgement is clearly required."
     },
-
     "positive_interest": {
       "send_reply": true,
       "format": "positive_share_more_info"
     },
-
     "positive_with_context": {
       "send_reply": true,
       "format": "positive_with_context"
     },
-
     "meeting_ready": {
       "send_reply": true,
       "format": "meeting_ready"
     },
-
     "pricing_question": {
       "send_reply": true,
       "format": "pricing_question"
     },
-
     "case_study_or_proof_request": {
       "send_reply": true,
       "format": "proof_or_case_study"
     }
   },
-
   "call_agenda_examples": [
     "how {{companyName}} currently generates and handles qualified opportunities",
     "where ideal prospects may be visiting your website or landing pages without converting",
@@ -295,7 +155,6 @@
     "how we qualify replies before booking meetings on your calendar",
     "how we protect deliverability while scaling outbound volume"
   ],
-
   "goal_examples": [
     "generate more qualified sales conversations",
     "turn existing website traffic into booked sales calls",
@@ -306,7 +165,6 @@
     "make current marketing and sales efforts work harder",
     "build a predictable outbound channel without hiring internal SDRs"
   ],
-
   "friction_removal_examples": [
     "to add another SEO or ad effort just to bring in more visitors",
     "to add another tool your team has to manage",
@@ -317,15 +175,10 @@
     "to book meetings with unqualified prospects",
     "to flood your calendar with low-fit calls"
   ],
-
   "core_positioning": {
-
     "what_we_do": "Ascendly helps B2B companies generate qualified sales meetings by combining inbound opportunity capture with highly targeted cold email outreach.",
-
     "how_we_do_it": "We identify ideal prospects visiting your website or landing pages, route them into personalized email campaigns, source cold ICP lists, run outbound campaigns, manage replies, qualify interest, and book meetings directly on your calendar.",
-
     "what_we_do_not_do": "We are not adding another SEO, ad, or software tool for the team to manage. We focus on turning existing resources and targeted outbound into qualified sales conversations.",
-
     "result": "The goal is to drive 10-20 qualified sales conversations each month with the kind of customers {{companyName}} actually wants to work with."
   }
 }
