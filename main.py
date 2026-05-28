@@ -263,7 +263,7 @@ def strip_existing_signature(message):
     message = normalize_email_spacing(message)
 
     patterns = [
-        r"\n+(Best|Best regards|Kind regards|Regards|Warm regards|Thanks|Thanks in advance|Thank you|Sincerely|Cheers),?\s*\n.*$",
+        r"\n+(Best|Best regards|Kind regards|Regards|Warm regards|Thanks|Thanks in advance|Thank you|Sincerely|Cheers),?\s*\n?.*$",
         r"\n+\{\{sendingAccountName\}\}.*$",
         r"\n+\{\{sending_account_name\}\}.*$",
         r"\n+\{\{website\}\}.*$",
@@ -271,13 +271,36 @@ def strip_existing_signature(message):
     ]
 
     for pattern in patterns:
-        message = re.sub(pattern, "", message, flags=re.IGNORECASE | re.DOTALL).strip()
+        message = re.sub(
+            pattern,
+            "",
+            message,
+            flags=re.IGNORECASE | re.DOTALL
+        ).strip()
 
     return normalize_email_spacing(message)
 
 
 def add_signature(message, sender_name, website):
-    return strip_existing_signature(message)
+    message = strip_existing_signature(message)
+
+    sender_name = (sender_name or "").strip()
+    website = (website or "").strip()
+
+    signature_parts = []
+
+    if sender_name:
+        signature_parts.append(sender_name)
+
+    if website:
+        signature_parts.append(website)
+
+    signature = "\n".join(signature_parts).strip()
+
+    if signature:
+        return f"{message}\n\n{signature}"
+
+    return message
 
 
 def generate_ai_reply(client_profile, reply_format, thread):
@@ -312,10 +335,10 @@ RULES:
 - Keep formatting compact and readable
 - Do not invent facts
 - Main reply must end with a clear CTA or question
-- ABSOLUTELY NO CLOSINGS OR SIGNATURES.
-- Do not write Best, Best regards, Kind regards, Regards, Warm regards, Thanks, Thanks in advance, Thank you, Sincerely, Cheers, sender name, initials, website, or any signature.
+- Do not write Best, Best regards, Kind regards, Regards, Warm regards, Thanks, Thanks in advance, Thank you, Sincerely, or Cheers.
+- Do not write sender name, initials, website, or any signature.
 - Stop immediately after the final CTA/question/sentence.
-- The sending platform/account appends signatures dynamically.
+- The system appends the sender name and website dynamically after generation.
 - If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
 - If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
 
