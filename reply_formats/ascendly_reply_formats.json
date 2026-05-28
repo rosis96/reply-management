@@ -195,7 +195,7 @@
 
       "template": "Hey {{firstName}},\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming improving pipeline consistency is probably not a priority for {{companyName}} right now, is that fair?\n\nEither way, appreciate the time and certainly do not want to be a pest."
     }
-  }
+  },
 
   "placeholder_explanations": {
 
@@ -329,4 +329,3 @@
     "result": "The goal is to drive 10-20 qualified sales conversations each month with the kind of customers {{companyName}} actually wants to work with."
   }
 }
-```
