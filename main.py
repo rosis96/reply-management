@@ -297,14 +297,16 @@ RULES:
 - Do not over-explain
 - Match the prospect's tone
 - Continue from the actual thread
-- Keep main_reply under 100 words
-- Use short paragraphs
+- Follow the word count defined for the selected intent inside REPLY FORMAT RULES.
+- Different main reply intents may have different word counts.
+- Some main replies may be under 100 words, while others may be 150+ words if the selected format requires it.
+- Follow-up replies should follow their own max_words rules.
 - Use only one empty line between paragraphs
 - Never add double blank lines
 - Keep formatting compact and readable
 - Do not invent facts
 - Main reply must end with a clear CTA or question
-- Do not add sender signature yourself
+- Do not add the sender's signature yourself
 - Do not add Best, Kind regards, sender name, or website yourself
 - If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
 - If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
