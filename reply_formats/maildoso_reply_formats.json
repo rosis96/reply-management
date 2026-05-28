@@ -23,7 +23,8 @@
         "around noon or shortly after",
         "Tuesday morning or Wednesday afternoon"
       ]
-    }
+    },
+    "signature_rule": "Do not add Best, Kind regards, Regards, sender name, initials, website, or any signature. The system appends sender name and website dynamically after generation."
   },
   "scheduling_rules": {
     "meeting_window": "10:00 AM to 2:00 PM",
@@ -45,19 +46,19 @@
   "main_reply_formats": {
     "positive_share_more_info": {
       "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
-      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} build a cleaner revenue pipeline where inbound leads, outbound prospects, and open deals are followed up without relying on manual work.\n\nWe do this by combining lead capture, enrichment, AI-personalized outbound, retargeting, and post-meeting follow-up into one managed system. The goal is not to add another tool for your team to manage, but to make sure fewer qualified opportunities slip through the cracks.\n\nI\u2019d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+      "template": "Hey {{firstName}},\n\nThe idea is to help {{companyName}} build a cleaner revenue pipeline where inbound leads, outbound prospects, and open deals are followed up without relying on manual work.\n\nWe do this by combining lead capture, enrichment, AI-personalized outbound, retargeting, and post-meeting follow-up into one managed system. The goal is not to add another tool for your team to manage, but to make sure fewer qualified opportunities slip through the cracks.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
     },
     "positive_with_context": {
       "intent": "Prospect says yes and adds context, humor, concern, or business detail.",
-      "template": "Hey {{firstName}}, {{casual_response_to_prospect_comment}}\n\nThe idea is to help {{companyName}} create a more consistent revenue pipeline where leads are captured, enriched, followed up, and re-engaged automatically.\n\nWe do this through AI-personalized outbound, inbound lead routing, retargeting between touchpoints, and post-meeting follow-up automation. The goal is not to replace your sales process, but to keep the right opportunities moving so your team can focus on closing.\n\nI\u2019d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite.\n\nBest,\n{{sendingAccountName}}\n{{website}}"
+      "template": "Hey {{firstName}}, {{casual_response_to_prospect_comment}}\n\nThe idea is to help {{companyName}} create a more consistent revenue pipeline where leads are captured, enriched, followed up, and re-engaged automatically.\n\nWe do this through AI-personalized outbound, inbound lead routing, retargeting between touchpoints, and post-meeting follow-up automation. The goal is not to replace your sales process, but to keep the right opportunities moving so your team can focus on closing.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
     },
     "meeting_ready": {
       "intent": "Prospect says let's meet, send times, book a call, calendar, happy to chat, or similar.",
-      "template": "Hey {{firstName}},\n\nI\u2019d be glad to walk you through how Ascendly captures inbound leads, launches AI-personalized outbound, keeps prospects warm through retargeting, and follows up after meetings so deals do not go quiet.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works, and I will send the invitation.\n\nKind regards,\n{{sendingAccountName}}"
+      "template": "Hey {{firstName}},\n\nI’d be glad to walk you through how Ascendly captures inbound leads, launches AI-personalized outbound, keeps prospects warm through retargeting, and follows up after meetings so deals do not go quiet.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works, and I will send the invitation."
     },
     "pricing_question": {
       "intent": "Prospect asks about pricing, cost, quote, package, budget, or rate.",
-      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let\u2019s first figure out if, assuming there\u2019s no pricing constraint, Ascendly would actually fit {{companyName}} and support the kind of pipeline consistency you\u2019re aiming for.\n\nTypically, we walk through how inbound leads are handled, where outbound could be improved, and whether retargeting plus AI follow-up would help create more qualified conversations.\n\nEither way, you\u2019ll leave with a clearer view of where revenue opportunities may be slipping.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?\n\nAnd no worries, you will not have to pay a single dollar just to get into the call.\n\nKind regards,\n{{sendingAccountName}}"
+      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let’s first figure out if, assuming there’s no pricing constraint, Ascendly would actually fit {{companyName}} and support the kind of pipeline consistency you’re aiming for.\n\nTypically, we walk through how inbound leads are handled, where outbound could be improved, and whether retargeting plus AI follow-up would help create more qualified conversations.\n\nEither way, you’ll leave with a clearer view of where revenue opportunities may be slipping.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?\n\nAnd no worries, you will not have to pay a single dollar just to get into the call."
     }
   },
   "followup_formats": {
@@ -65,25 +66,25 @@
       "send_after": "1 working day after main reply",
       "max_words": 80,
       "signature_required": false,
-      "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn\u2019t see a confirmation come through. Let\u2019s get something on the calendar so we don\u2019t lose momentum.\n\nWe can do {{previous_proposed_time_1}} or {{previous_proposed_time_2}}. Do either of those work for you? If not, I\u2019m happy to adjust around your schedule.\n\nBest,"
+      "template": "Hi {{firstName}}, {{contextual_check_question}}\n\nI shared some availability last time, but didn’t see a confirmation come through. Let’s get something on the calendar so we don’t lose momentum.\n\nWe can do {{previous_proposed_time_1}} or {{previous_proposed_time_2}}. Do either of those work for you? If not, I’m happy to adjust around your schedule.\n\nBest,"
     },
     "followup_2": {
       "send_after": "2 working days after followup_1",
       "max_words": 90,
       "signature_required": false,
-      "template": "{{firstName}}?\n\nI am still interested in learning if {{companyName}} is currently focused on improving pipeline consistency and getting more qualified sales conversations from the leads and prospects already in motion.\n\nAscendly helps by connecting inbound capture, AI-personalized outbound, retargeting, and post-meeting follow-up into one managed revenue system.\n\nI\u2019d be glad to share how this could work for {{companyName}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work best for a quick call?\n\nBest,"
+      "template": "{{firstName}}?\n\nI am still interested in learning if {{companyName}} is currently focused on improving pipeline consistency and getting more qualified sales conversations from the leads and prospects already in motion.\n\nAscendly helps by connecting inbound capture, AI-personalized outbound, retargeting, and post-meeting follow-up into one managed revenue system.\n\nI’d be glad to share how this could work for {{companyName}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work best for a quick call?\n\nBest,"
     },
     "followup_3": {
       "send_after": "2 working days after followup_2",
       "max_words": 100,
       "signature_required": false,
-      "template": "Hi {{firstName}},\n\nWe build and operate revenue systems that let {{companyName}} capture inbound leads faster, launch AI-personalized outbound, retarget engaged prospects, and keep open deals from going quiet.\n\nI\u2019d love to share more and see if we can lock in a time to chat. It would be great to hop on a quick Zoom call where I can walk you through the pipeline system, the retargeting layer, and the post-meeting follow-up workflow.\n\nI\u2019m available {{proposed_time_1}} or {{proposed_time_2}}. If either works, I\u2019ll send over a calendar invite.\n\nKind regards,"
+      "template": "Hi {{firstName}},\n\nWe build and operate revenue systems that let {{companyName}} capture inbound leads faster, launch AI-personalized outbound, retarget engaged prospects, and keep open deals from going quiet.\n\nI’d love to share more and see if we can lock in a time to chat. It would be great to hop on a quick Zoom call where I can walk you through the pipeline system, the retargeting layer, and the post-meeting follow-up workflow.\n\nI’m available {{proposed_time_1}} or {{proposed_time_2}}. If either works, I’ll send over a calendar invite.\n\nKind regards,"
     },
     "followup_4": {
       "send_after": "3 working days after followup_3",
       "max_words": 90,
       "signature_required": false,
-      "template": "Hi {{firstName}}, we\u2019ve heard from other B2B service leaders that leads rarely disappear because the offer is bad. They disappear because follow-up is inconsistent.\n\nSound familiar?\n\nImagine reducing missed inbound leads, cold outbound gaps, and quiet open deals without adding more manual work to your team. Ascendly does that by running the pipeline system behind the scenes.\n\nWould that fit what you are doing now? Let\u2019s meet next week and decide what works best for {{companyName}}."
+      "template": "Hi {{firstName}}, we’ve heard from other B2B service leaders that leads rarely disappear because the offer is bad. They disappear because follow-up is inconsistent.\n\nSound familiar?\n\nImagine reducing missed inbound leads, cold outbound gaps, and quiet open deals without adding more manual work to your team. Ascendly does that by running the pipeline system behind the scenes.\n\nWould that fit what you are doing now? Let’s meet next week and decide what works best for {{companyName}}."
     },
     "followup_5": {
       "send_after": "2 working days after followup_4",
@@ -95,7 +96,7 @@
       "send_after": "2 working days after followup_5",
       "max_words": 70,
       "signature_required": false,
-      "template": "{{firstName}}?\n\nI\u2019ve reached out a few times but haven\u2019t heard back, so I\u2019m assuming Ascendly is not of interest to you for improving pipeline consistency right now, is that right?\n\nEither way, let me know. Certainly don\u2019t want to be a pest.\n\nThanks in advance,"
+      "template": "{{firstName}}?\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming Ascendly is not of interest to you for improving pipeline consistency right now, is that right?\n\nEither way, let me know. Certainly don’t want to be a pest.\n\nThanks in advance,"
     }
   },
   "intent_handling": {

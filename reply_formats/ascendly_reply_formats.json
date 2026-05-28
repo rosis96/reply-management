@@ -14,7 +14,7 @@
       "hype",
       "buzzwords"
     ],
-    "signature_rule": "Do not add sender name, initials, website, Best, Kind regards, or any full signature in AI-generated replies. Signature is added dynamically by the system.",
+    "signature_rule": "Do not add Best, Kind regards, Regards, sender name, initials, website, or any signature. The system appends sender name and website dynamically after generation.",
     "meeting_time_humanization": {
       "enabled": true,
       "examples": [

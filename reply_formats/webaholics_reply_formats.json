@@ -25,7 +25,7 @@
       ]
     },
     "followup_signature": "Do not add sender name, initials, website, or full signature in follow-up copy.",
-    "signature_rule": "Never add Best, Regards, Kind regards, sender names, initials, websites, or signatures. The sending platform/account appends signatures dynamically. Stop immediately after the final CTA/question/sentence."
+    "signature_rule": "Do not add Best, Kind regards, Regards, sender name, initials, website, or any signature. The system appends sender name and website dynamically after generation."
   },
   "scheduling_rules": {
     "meeting_window": "10:00 AM to 2:00 PM",
