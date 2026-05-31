@@ -22,7 +22,7 @@ app = FastAPI()
 with open("config.json", "r") as f:
     CONFIG = json.load(f)
 
-REPLY_DELAY_SECONDS = 180
+REPLY_DELAY_SECONDS = 420
 PROCESSED_FILE = "logs/processed_replies.json"
 
 
@@ -305,7 +305,7 @@ def add_signature(message, sender_name, website):
 
 def generate_ai_reply(client_profile, reply_format, thread):
     prompt = f"""
-You are an expert outbound sales reply assistant.
+You are an expert outbound sales reply writer. Your job is to write replies that feel like they came from a sharp, real human — not a sales bot.
 
 CLIENT PROFILE:
 {json.dumps(client_profile, indent=2)}
@@ -316,31 +316,72 @@ REPLY FORMAT RULES:
 EMAIL THREAD:
 {json.dumps(thread, indent=2)}
 
-TASK:
-Write the immediate reply we should send now and generate 6 future follow-ups.
+---
 
-RULES:
-- Sound human
-- Do not sound robotic
-- Do not use em dashes
-- Do not over-explain
-- Match the prospect's tone
-- Continue from the actual thread
-- Follow the word count defined for the selected intent inside REPLY FORMAT RULES.
-- Different main reply intents may have different word counts.
-- Some main replies may be under 100 words, while others may be 150+ words if the selected format requires it.
-- Follow-up replies should follow their own max_words rules.
-- Use only one empty line between paragraphs
-- Never add double blank lines
-- Keep formatting compact and readable
-- Do not invent facts
-- Main reply must end with a clear CTA or question
-- Do not write Best, Best regards, Kind regards, Regards, Warm regards, Thanks, Thanks in advance, Thank you, Sincerely, or Cheers.
-- Do not write sender name, initials, website, or any signature.
-- Stop immediately after the final CTA/question/sentence.
-- The system appends the sender name and website dynamically after generation.
-- If unsubscribe intent, set intent to "unsubscribe" and main_reply empty
-- If wrong person, out of office, automated, unclear, or risky, set human_review_needed true
+STEP 1 — READ THE PROSPECT FIRST.
+Before writing anything, assess:
+- What is their energy? (casual, formal, skeptical, warm, funny, rushed, curious)
+- Are they being brief or detailed?
+- Are they using humor, sarcasm, or lightness?
+- What is the one thing they actually want to know or say?
+
+STEP 2 — MATCH THEIR ENERGY EXACTLY.
+- If they wrote 2 sentences, do not write 8.
+- If they used humor or were casual, be casual and warm back. You are allowed to be funny.
+- If they were formal and direct, be clean and professional.
+- If they asked a specific question, answer it first before anything else.
+- Never open with a compliment. Never say "Great question" or "Thanks for reaching out."
+
+STEP 3 — WRITE LIKE A PERSON, NOT A TEMPLATE.
+- Use the intent templates from REPLY FORMAT RULES as strategic guidance only, not as scripts to fill in.
+- Do not mechanically complete placeholders. Use them as inspiration for what to say naturally.
+- Vary your sentence rhythm. Mix short punchy sentences with longer ones.
+- It is okay to be slightly self-aware or dry if the prospect is.
+- Never use em dashes.
+- Never use buzzwords or hype.
+- Word count ranges are guides, not hard rules. A genuinely short sharp reply is better than padding to hit a number.
+
+STEP 4 — OUT OF CONTEXT OR UNEXPECTED QUESTIONS.
+If the prospect asks something that does not fit a standard intent — a clarification, an off-topic question, a question about what exactly was pitched, or anything unexpected — do NOT leave main_reply blank.
+Instead:
+- Answer their exact question first, directly and simply.
+- Then briefly explain what the client actually does in one or two sentences, tied to what they just asked.
+- End with a natural next step or soft call offer if it fits.
+- Example: If they ask "Are you referring to website design?" — answer that directly, clarify what the service actually covers, and tie it back naturally.
+This is the out_of_context_question intent. Use it whenever nothing else clearly fits.
+
+STEP 5 — WHAT GOOD LOOKS LIKE.
+
+BAD (robotic):
+"Hey Sarah, thanks for being open to it. The goal is to help Acme Corp get in front of brand marketers and campaign leads. We do this through highly targeted cold email outreach that identifies high-fit prospects and manages replies through qualification and scheduling so the right opportunities reach your calendar. I'd love to walk you through how this would look for Acme Corp. Does Monday at 10 AM or 11 AM work?"
+
+GOOD (human):
+"Hey Sarah, glad it landed well.
+
+In short — we'd be going after brand leads and campaign decision-makers at the kind of brands you actually want to work with. Targeted outreach, qualified replies, no noise reaching your calendar.
+
+Would Monday around 10 or 11 work for a quick walkthrough?"
+
+BAD (blank or signature-only when prospect asked a question):
+[empty main_reply with just a signature]
+
+GOOD (out of context question handled):
+"Hey Line, not exactly — though there is some overlap.
+
+We focus on the full acquisition side: paid traffic, SEO, conversion-focused landing pages, CRM follow-up, and reporting all connected into one system. Website design is part of it, but the goal is qualified inquiries, not just a new site.
+
+Worth a quick call to see if that is relevant to MidCoast Solar?
+
+Monday around 10 or 11, or Tuesday around noon work?"
+
+STEP 6 — RULES THAT NEVER CHANGE.
+- Do not write Best, Regards, Kind regards, Thanks, or any sign-off.
+- Do not write sender name, initials, or website. The system adds this automatically.
+- Stop immediately after the final CTA or question.
+- NEVER return an empty main_reply unless the intent is unsubscribe or confirmed negative (not_interested). Every other reply type must have a written response.
+- If out of office, automated, or wrong person — set human_review_needed to true.
+- If the intent is unclear but the prospect clearly asked something — still write a reply and set confidence lower, do not leave it blank.
+- Main reply must always end with a clear next step or question.
 
 Return ONLY valid JSON:
 
@@ -361,12 +402,12 @@ Return ONLY valid JSON:
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
-                model="gpt-4.1-mini",
-                temperature=0.4,
+                model="gpt-4.1",
+                temperature=0.6,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Return only valid JSON. No markdown. Never add Best, Regards, Kind regards, sender names, initials, websites, or signatures. Stop right after the CTA or final message statement."
+                        "content": "You write outbound sales replies that sound like a sharp, real human. Return only valid JSON. No markdown. Never add sign-offs, sender names, initials, websites, or signatures. Stop right after the CTA or final message. NEVER return an empty main_reply unless intent is unsubscribe or negative_not_interested."
                     },
                     {
                         "role": "user",
@@ -812,8 +853,11 @@ def update_instantly_lead(lead_id, ai_result, api_key):
 
 
 def process_instantly_reply(payload):
+    log(f"Received Instantly job. Waiting {REPLY_DELAY_SECONDS} seconds before replying.")
+    time.sleep(REPLY_DELAY_SECONDS)
     log("Processing Instantly reply webhook...")
     log(json.dumps(payload, indent=2))
+    ...
 
     workspace_name = "Webaholics"
     workspace = CONFIG["workspaces"][workspace_name]

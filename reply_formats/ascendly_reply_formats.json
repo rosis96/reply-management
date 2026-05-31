@@ -1,34 +1,87 @@
 {
   "client_name": "Ascendly",
   "website": "https://ascendly.one",
+  "reply_management_goal": "Classify the prospect reply, read the previous conversation context, answer the exact question first, then generate the most natural reply within Ascendly's offer. Do not force every positive reply into the same template.",
+  "core_offer": "Ascendly helps B2B companies generate qualified sales meetings by combining inbound opportunity capture, anonymous visitor identification, targeted outbound, LinkedIn outreach, retargeting for engaged prospects, reply management, qualification, and calendar booking.",
+  "tone": "Human, direct, useful, practical, and calm. Mirror the prospect's tone exactly. If they are brief, reply briefly. If they used humor, be warm and light back. If they asked a detailed question, answer with enough substance before proposing a call. Never sound like a sales script.",
+  "voice_and_tone": {
+    "core_principle": "Write like a sharp person who knows their stuff and does not need to oversell it. Calm confidence, not hype.",
+    "humor_permission": true,
+    "humor_guidance": "If the prospect is being light, casual, or funny \u2014 match that energy. A dry observation, a self-aware comment, or a brief joke is allowed and encouraged when it fits. Do not force humor into serious or skeptical replies.",
+    "energy_matching": "Always read the prospect's tone before writing. A two-sentence casual reply deserves a two or three sentence casual response. A detailed skeptical reply deserves a more thorough, grounded answer.",
+    "what_human_sounds_like": [
+      "Short punchy sentences mixed with occasional longer ones.",
+      "No filler phrases like 'Great question' or 'Thanks for reaching out'.",
+      "Acknowledging what they actually said before pivoting to Ascendly.",
+      "Not explaining everything \u2014 leaving room for the call.",
+      "Occasionally starting a sentence with And, But, or So.",
+      "Using contractions: we'd, I'd, it's, you're, that's."
+    ],
+    "what_robotic_sounds_like": [
+      "Opening with a compliment.",
+      "Long paragraphs that explain every service.",
+      "Mechanically filling in placeholders without adapting to the actual reply.",
+      "Using the same sentence structure every time.",
+      "Hitting a word count instead of saying what needs to be said.",
+      "Ending with 'Please let me know and I will send the invitation right away' when a shorter close fits better."
+    ],
+    "good_vs_bad_example": {
+      "prospect_reply": "Sure, curious what this looks like.",
+      "bad_reply": "Hey James, thanks for being open to it. The goal is to help Acme Corp get in front of brand marketers and campaign leads at consumer brands, driving consistent conversations with serious brand teams. We do this through highly targeted cold email outreach that identifies high-fit prospects, positions your brand strategy work clearly, and manages replies through qualification and scheduling so the right opportunities reach your calendar. I'd love to walk you through how this would look for Acme Corp, what messaging angles could work, and what kind of meeting flow is realistic. Does Monday at 10 AM or Tuesday at 11 AM work? Please let me know and I will send the invitation right away.",
+      "good_reply": "Hey James, glad it caught your eye.\n\nIn short \u2014 we'd be going after the kind of buyers you actually want: brand leads, campaign decision-makers, the people with budget and a real problem to solve. Targeted outreach, qualified replies, nothing noisy hitting your calendar.\n\nWould Monday around 10 or 11 work for a quick walkthrough?"
+    }
+  },
   "formatting_rules": {
-    "main_reply_word_count": "Follow each intent-specific word count.",
-    "followup_word_count": "Follow each follow-up-specific max_words.",
     "use_line_breaks": true,
     "no_one_line_replies": true,
+    "signature_rule": "Do not add Best, Kind regards, Regards, sender name, initials, website, or any signature. The system appends sender name and website dynamically after generation.",
     "avoid": [
       "em dashes",
       "robotic phrases",
       "generic compliments",
       "long paragraphs",
       "hype",
-      "buzzwords"
+      "buzzwords",
+      "fake proof",
+      "ignoring the actual question",
+      "padding to hit a word count",
+      "explaining every service when one or two points will do",
+      "ending every reply the same way"
+    ]
+  },
+  "reply_generation_logic": {
+    "core_rule": "Use templates as strategy, not as scripts. Read the prospect's actual reply and write naturally from there. The template tells you what to cover \u2014 your judgment tells you how.",
+    "decision_order": [
+      "Check if reply should be ignored: unsubscribe, automated, out of office, or clear negative.",
+      "Identify main intent.",
+      "Identify secondary intent if present.",
+      "Read the last outbound email to understand what Ascendly pitched.",
+      "Read the prospect's energy and tone.",
+      "Answer the prospect's direct question first.",
+      "Add only the Ascendly context needed to move the conversation forward.",
+      "Propose a call only if natural.",
+      "Use proposed times unless prospect specifically asks for calendar link.",
+      "If unclear, classify as human_review_needed."
     ],
-    "signature_rule": "Do not add Best, Kind regards, Regards, sender name, initials, website, or any signature. The system appends sender name and website dynamically after generation.",
-    "meeting_time_humanization": {
-      "enabled": true,
-      "examples": [
-        "around 10 AM, 11 AM, or noon",
-        "late morning or early afternoon",
-        "around noon or shortly after",
-        "Tuesday morning or Wednesday afternoon"
-      ]
-    }
+    "multi_intent_rule": "If the reply has multiple intents, answer them in priority order instead of using only one template.",
+    "tone_detection": {
+      "instruction": "Before generating, silently assess: Is the prospect formal or casual? Brief or detailed? Warm or skeptical? Funny or dry? Then write to match that exactly.",
+      "if_casual_or_funny": "Be warm, lighter, and conversational. Shorter sentences. It is okay to acknowledge their humor briefly before moving forward.",
+      "if_formal_or_skeptical": "Be clean, grounded, and direct. Fewer words. Answer the concern before pitching anything.",
+      "if_brief": "Match their brevity. Do not write a paragraph when two sentences will do.",
+      "if_detailed": "Engage with the substance. Show you read it. Then earn the call."
+    },
+    "examples": [
+      "website + what do you do = send website first, explain Ascendly briefly, then offer call.",
+      "pricing + case studies = explain pricing is scoped by fit, mention proof can be shown, then offer call.",
+      "already have vendor + curious = acknowledge current vendor, explain where Ascendly may still help, then offer comparison call.",
+      "send deck + pricing = offer overview, explain pricing depends on scope, then offer call.",
+      "referral + question = ask for intro while briefly answering the question.",
+      "funny or casual reply = match the lightness, be brief, still end with a time."
+    ]
   },
   "scheduling_rules": {
     "meeting_window": "10:00 AM to 2:00 PM",
-    "minimum_days_after_reply_for_main_reply": 2,
-    "minimum_days_after_followup_send": 2,
     "preferred_times": [
       "10:00 AM",
       "11:00 AM",
@@ -39,146 +92,451 @@
       "Saturday",
       "Sunday"
     ],
-    "thursday_or_friday_logic": "If prospect replies Thursday or Friday, propose Monday or Tuesday next week. If prospect replies Monday, propose Wednesday or Thursday.",
-    "proposal_style": "Whenever proposing times, suggest 2 working days and provide 2 to 3 time windows for each day in a natural human way. Example: Monday around 10 AM, 11 AM, or noon, or Tuesday around 11 AM, noon, or early afternoon. Use natural terms like noon, afternoon, early afternoon instead of rigid timestamps whenever appropriate."
+    "proposal_style": "Suggest 2 working days with 2 to 3 time windows each. Use natural language. For casual replies, keep it even shorter: 'Monday around 10 or 11?' is fine. For formal replies, be slightly more complete."
   },
-  "main_reply_formats": {
-    "positive_share_more_info": {
-      "intent": "Prospect says yes, interested, send more info, share more, sounds good, or similar.",
-      "word_count": "160-180",
-      "template": "Hey {{firstName}},\n\nThe goal is to {{ultimate_business_outcome_you_help_them_achieve}}.\n\nWe do this by optimizing your inbound flow and running outbound campaigns. We work on your existing lead flow, and if there are any of your ideal prospects visiting your website or ad landing pages but not filling out a form or contacting your team, we identify those companies, route them into personalized email campaigns within minutes, and increase your booked calls. Alongside that, we also source cold lists of your ICPs and run highly targeted outbound campaigns in parallel.\n\nThe goal is not to add another SEO or ad effort to bring in more visitors, but to ensure your existing resources and marketing efforts are utilized at full capacity, driving 10–20 qualified sales conversations each month.\n\nI’d be glad to walk you through {{3_to_4_relevant_call_agenda_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
+  "intent_priority_order": [
+    "unsubscribe",
+    "out_of_office_or_automated",
+    "negative_not_interested",
+    "referral_request",
+    "meeting_ready",
+    "pricing_question",
+    "website_request",
+    "deck_request",
+    "client_request",
+    "case_study_or_proof_request",
+    "sample_request",
+    "request_for_details",
+    "clarification_question",
+    "lead_source_question",
+    "deliverability_question",
+    "guarantee_question",
+    "results_question",
+    "technology_question",
+    "implementation_question",
+    "compliance_question",
+    "channel_question",
+    "competitive_comparison",
+    "industry_fit_question",
+    "geography_question",
+    "timeline_question",
+    "volume_question",
+    "resource_question",
+    "already_have_solution",
+    "timing_not_now",
+    "positive_with_context",
+    "positive_interest",
+    "friendly_response",
+    "out_of_context_question",
+    "human_review_needed"
+  ],
+  "intent_categories": {
+    "unsubscribe": {
+      "description": "Prospect asks to be removed or opted out.",
+      "signals": [
+        "unsubscribe",
+        "remove me",
+        "opt out",
+        "stop emailing",
+        "take me off"
+      ],
+      "send_reply": false,
+      "action": "Do not send. Save log only."
+    },
+    "out_of_office_or_automated": {
+      "description": "Automated or vacation reply.",
+      "signals": [
+        "out of office",
+        "automatic reply",
+        "auto-reply",
+        "vacation",
+        "OOO"
+      ],
+      "send_reply": false,
+      "action": "Do not send."
+    },
+    "negative_not_interested": {
+      "description": "Clear no or rejection.",
+      "signals": [
+        "not interested",
+        "no thanks",
+        "pass",
+        "not a fit"
+      ],
+      "send_reply": false,
+      "action": "Do not send unless polite acknowledgement is clearly required."
+    },
+    "positive_interest": {
+      "description": "Prospect gives a simple positive reply such as sure, interested, send more, show me, yes, or I'd like to learn more, without asking a specific question.",
+      "signals": [
+        "yes",
+        "sure",
+        "interested",
+        "sounds good",
+        "tell me more",
+        "send more info",
+        "share more",
+        "show me",
+        "I'd like to see it",
+        "curious",
+        "go ahead",
+        "happy to learn more",
+        "open to it"
+      ],
+      "send_reply": true,
+      "word_count": "60-130 words. Use fewer words if the prospect was brief. Do not pad.",
+      "style_rules": [
+        "Do not open with a compliment.",
+        "Acknowledge their reply naturally \u2014 one short line is enough.",
+        "Explain what Ascendly would do for their specific business in one tight paragraph.",
+        "Do not list every service. Pick the most relevant angle from the thread.",
+        "End with times. Keep the close natural \u2014 it does not always need to be a full sentence.",
+        "If they were casual or funny, match that. Keep it lighter and shorter.",
+        "If the original pitch was about cold email only, keep reply focused on cold email unless context suggests otherwise."
+      ],
+      "template": "Hey {{firstName}}, glad it landed well.\n\nIn short \u2014 the goal is to get {{companyName}} in front of {{specific_target_buyers}}, with qualified conversations reaching your calendar and nothing else.\n\nWe handle the targeting, the outreach, and the reply qualification so your team only sees the right people.\n\nWould {{proposed_time_1}} or {{proposed_time_2}} work for a quick walkthrough?",
+      "template_note": "This is a starting point, not a script. If the prospect was brief, cut this down further. If they were funny, loosen it up.",
+      "placeholder_explanations": {
+        "{{specific_target_buyers}}": "2-3 buyer types with real context from the prospect's business. Be specific.",
+        "{{proposed_time_1}}": "First day with 2-3 times.",
+        "{{proposed_time_2}}": "Second day with 2-3 times."
+      }
     },
     "positive_with_context": {
-      "intent": "Prospect says yes and adds context, humor, concern, opinion, or business detail.",
-      "word_count": "160-180",
-      "template": "Hey {{firstName}},\n\n{{casual_response_to_prospect_comment}}\n\nThe goal is to help {{companyName}} create a more predictable pipeline of qualified sales conversations without relying entirely on referrals, inconsistent inbound, or manual outreach.\n\nWe do this by optimizing your existing lead flow and running highly targeted outbound campaigns in parallel. If ideal prospects visit your website or landing pages without contacting your team, we identify those companies and route them into personalized outreach quickly while also sourcing and targeting cold ICP lists through outbound email campaigns.\n\nThe goal is not to add another SEO or ad effort to bring in more visitors, but to ensure your current marketing and sales efforts are utilized fully, driving 10–20 qualified sales conversations each month.\n\nI’d be glad to walk you through {{call_agenda_3_to_4_items}}.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work for you? Please let me know and I will send the invite."
+      "description": "Prospect shows interest but adds context, a caveat, humor, a concern, niche detail, or their current situation.",
+      "signals": [
+        "interesting but",
+        "we are niche",
+        "we have a long sales cycle",
+        "we only work by referral",
+        "our market is different",
+        "our audience is unique"
+      ],
+      "send_reply": true,
+      "word_count": "70-140 words. Match their length. If they wrote two lines, do not write ten.",
+      "style_rules": [
+        "Acknowledge what they actually said. Do not skip past it.",
+        "If it was funny or self-deprecating, react naturally \u2014 one line is enough.",
+        "Show that their context is useful, not a problem.",
+        "Then explain briefly how Ascendly works around that specific situation.",
+        "Do not use a generic opener. React to what they wrote.",
+        "End with times."
+      ],
+      "template": "Hey {{firstName}}, that's actually useful context.\n\n[React to what they said in one natural sentence \u2014 acknowledge the niche, the cycle, the concern, or the humor directly.]\n\nHonestly that kind of situation is often where we do our best work \u2014 finding the right handful of conversations rather than volume.\n\nWould it be worth a quick call to see if the fit makes sense?\n\n{{proposed_time_1}} or {{proposed_time_2}} work?",
+      "template_note": "The line in brackets is not a placeholder to fill mechanically. Read what the prospect actually wrote and respond to it like a person would."
     },
     "meeting_ready": {
-      "intent": "Prospect says let’s meet, send times, book a call, happy to chat, calendar, or similar.",
-      "word_count": "60-90",
-      "template": "Hey {{firstName}},\n\nPerfect. I’d be glad to walk you through how Ascendly helps companies turn existing traffic and outbound into qualified sales conversations without adding more tools or internal sales overhead.\n\nWe’ll cover how visitor identification works, how we structure personalized outbound campaigns, what kind of messaging is converting right now, and what realistic meeting flow could look like for {{companyName}}.\n\nI am available {{proposed_time_1}} or {{proposed_time_2}}. Let me know what works best and I will send the invitation."
+      "description": "Prospect is ready to meet or asks for times.",
+      "signals": [
+        "let's meet",
+        "book a call",
+        "send times",
+        "happy to chat",
+        "let's talk",
+        "calendar",
+        "schedule"
+      ],
+      "send_reply": true,
+      "word_count": "50-90 words. They already said yes. Do not over-explain.",
+      "template": "Hey {{firstName}}, perfect.\n\nI'll walk you through how Ascendly works for {{companyName}} \u2014 visitor identification, targeted outbound, retargeting, and what a realistic meeting flow looks like for your market.\n\n{{proposed_time_1}} or {{proposed_time_2}} \u2014 what works?"
     },
     "pricing_question": {
-      "intent": "Prospect asks about pricing, quote, package, rates, budget, or cost.",
-      "word_count": "140-170",
-      "template": "Hey {{firstName}},\n\nPricing is a fair starting point, but let’s first figure out if, assuming there’s no pricing constraint, if our approach would actually fit {{companyName}} and support the kind of pipeline consistency you are aiming for.\n\nWhat you should expect is, we structure our pricing either as a monthly management engagement or a lighter optimization/audit project first, depending on how hands-on you want us to be after the initial review.\n\nUsually, we look at how qualified opportunities are currently coming in, where potential conversations are being lost, and whether combining visitor identification with targeted outbound could help create a more controlled flow of sales meetings.\n\nThe goal is not to add another marketing expense, but to make sure your existing traffic, campaigns, and outbound efforts are producing more qualified conversations consistently.\n\nI’d be glad to walk you through how this works, examples from similar campaigns, and what realistic meeting volume could look like for your market.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?"
+      "description": "Prospect asks for pricing, quote, rates, budget, or cost.",
+      "signals": [
+        "pricing",
+        "cost",
+        "how much",
+        "rates",
+        "quote",
+        "budget",
+        "fee",
+        "investment"
+      ],
+      "send_reply": true,
+      "word_count": "90-140 words.",
+      "template": "Hey {{firstName}}, fair question.\n\nHonestly pricing depends on scope and fit \u2014 so before I throw a number at you, it's worth figuring out whether Ascendly would actually move the needle for {{companyName}}.\n\nUsually we look at where qualified conversations are currently coming in, where they're being lost, and whether combining visitor identification, targeted outbound, and retargeting would give you a more consistent pipeline.\n\nIf the fit is there, the investment makes sense. If it's not, I'd rather tell you that.\n\n{{proposed_time_1}} or {{proposed_time_2}} work for a quick look?"
+    },
+    "website_request": {
+      "description": "Prospect asks for Ascendly website or URL.",
+      "signals": [
+        "website",
+        "site",
+        "URL",
+        "where can I learn more",
+        "send your website"
+      ],
+      "send_reply": true,
+      "word_count": "60-100 words.",
+      "template": "Hey {{firstName}}, of course.\n\nhttps://ascendly.one\n\nShort version: we help B2B companies turn existing traffic and outbound activity into qualified sales meetings \u2014 visitor identification, targeted outreach, retargeting, reply management.\n\nHappy to walk through how it would apply to {{companyName}} if useful.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "deck_request": {
+      "description": "Prospect asks for a deck, one-pager, overview, PDF, or presentation.",
+      "signals": [
+        "deck",
+        "presentation",
+        "overview",
+        "one pager",
+        "PDF",
+        "send material"
+      ],
+      "send_reply": true,
+      "word_count": "70-110 words.",
+      "template": "Hey {{firstName}}, yes \u2014 I can send a short overview.\n\nThe main thing to know is that Ascendly is not just outbound volume. We capture missed inbound, run targeted outbound in parallel, retarget engaged prospects, and qualify replies before anything hits your calendar.\n\nI can also walk through it live so it's specific to {{companyName}} rather than generic.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "client_request": {
+      "description": "Prospect asks who Ascendly has worked with, client names, or references.",
+      "signals": [
+        "clients",
+        "customers",
+        "who have you worked with",
+        "references",
+        "recognizable brands"
+      ],
+      "send_reply": true,
+      "word_count": "70-110 words.",
+      "template": "Hey {{firstName}}, fair.\n\nWe've worked with B2B service firms, agencies, software teams, solar and energy companies, and consulting groups \u2014 generally where deal size makes a managed pipeline system worth it.\n\nRather than throwing logos at you, I'd rather show the examples closest to {{companyName}} and explain what the campaign looked like.\n\n{{proposed_time_1}} or {{proposed_time_2}} work for a quick walkthrough?"
+    },
+    "case_study_or_proof_request": {
+      "description": "Prospect asks for proof, case studies, examples, references, or results.",
+      "signals": [
+        "case studies",
+        "proof",
+        "examples",
+        "results",
+        "testimonials",
+        "references"
+      ],
+      "send_reply": true,
+      "word_count": "70-110 words.",
+      "template": "Hey {{firstName}}, absolutely.\n\nI'd rather show you the examples closest to {{companyName}} than send something generic \u2014 so a quick call is usually the most useful way to do that.\n\nWe'd walk through ICP, campaign structure, messaging angle, meeting quality, and what changed once everything was running together.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "sample_request": {
+      "description": "Prospect asks for sample emails, sample campaigns, copy examples, or sequence examples.",
+      "signals": [
+        "sample",
+        "example email",
+        "sample outreach",
+        "sample campaign",
+        "sequence"
+      ],
+      "send_reply": true,
+      "word_count": "70-100 words.",
+      "template": "Hey {{firstName}}, yes \u2014 I can show examples.\n\nThe useful part isn't just the copy though. It's how we choose the audience, identify missed visitors, personalize the message, retarget engaged prospects, and qualify replies before anything hits your calendar.\n\nI can walk through a sample flow built around {{companyName}}.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "request_for_details": {
+      "description": "Prospect asks for more information or how it works.",
+      "signals": [
+        "more details",
+        "how does it work",
+        "what exactly do you do",
+        "explain",
+        "share process"
+      ],
+      "send_reply": true,
+      "word_count": "100-160 words.",
+      "template": "Hey {{firstName}}, happy to share more.\n\nThe goal is to help {{companyName}} generate more qualified sales conversations without relying only on referrals, ads, or manual follow-up.\n\nWe do this by identifying ideal prospects already visiting your website or landing pages, routing them into personalized outreach, running cold outbound to your ICP in parallel, and retargeting engaged prospects after they click or interact.\n\nSo instead of adding another SEO or ad layer, we help make sure your existing resources and outbound activity are actually producing consistent conversations.\n\nI'd be glad to walk you through {{call_agenda_3_to_4_items}}.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "clarification_question": {
+      "description": "Prospect asks what Ascendly does or whether this is outbound, marketing, or appointment setting.",
+      "signals": [
+        "what do you do",
+        "is this outbound",
+        "is this marketing",
+        "do you set appointments",
+        "what are you selling"
+      ],
+      "send_reply": true,
+      "word_count": "70-120 words.",
+      "template": "Hey {{firstName}}, good question.\n\nWe're not a traditional marketing agency. Ascendly is focused on one thing: qualified sales meetings.\n\nWe combine visitor identification, inbound lead routing, cold outbound, LinkedIn outreach, retargeting, and reply qualification \u2014 so your team spends more time with people who are already a fit and less time chasing cold leads.\n\nHappy to show what that looks like for {{companyName}}.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "lead_source_question": {
+      "description": "Prospect asks where leads come from or how prospects are sourced.",
+      "signals": [
+        "where do leads come from",
+        "how do you source leads",
+        "what databases",
+        "how do you identify prospects",
+        "where do you get data"
+      ],
+      "send_reply": true,
+      "word_count": "90-130 words.",
+      "template": "Hey {{firstName}}, good question.\n\nTwo main places. First, we identify companies already visiting your website or landing pages but not converting. Second, we build cold ICP lists using data sources, enrichment, verification, and manual checks based on your target market.\n\nThose prospects get routed into personalized outbound, and replies are qualified before anything reaches your calendar.\n\nI can walk you through how sourcing and qualification would work specifically for {{companyName}}.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "deliverability_question": {
+      "description": "Prospect asks about spam, inboxes, domains, warming, or deliverability.",
+      "signals": [
+        "spam",
+        "deliverability",
+        "domain reputation",
+        "warming",
+        "inbox placement",
+        "email infrastructure"
+      ],
+      "send_reply": true,
+      "word_count": "90-130 words.",
+      "template": "Hey {{firstName}}, totally fair concern.\n\nDeliverability is a core part of the system \u2014 not an afterthought. We look at domains, inbox setup, sending volume, warming, authentication, copy structure, bounce risk, and reply quality before scaling anything.\n\nThe goal is not to blast volume. It's to keep outreach controlled, relevant, and safe enough to support a long-term pipeline.\n\nI can walk you through how we protect inbox health while still generating consistent meetings.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "guarantee_question": {
+      "description": "Prospect asks about guarantees, risk, replacements, or what happens if it fails.",
+      "signals": [
+        "guarantee",
+        "what if it doesn't work",
+        "risk",
+        "replacement",
+        "performance guarantee"
+      ],
+      "send_reply": true,
+      "word_count": "90-130 words.",
+      "template": "Hey {{firstName}}, fair question.\n\nWe don't position this as magic. What we control is targeting quality, outreach, reply handling, and meeting qualification.\n\nIf a lead is outside the agreed ICP or clearly unqualified, we replace it. Same if a prospect no-shows.\n\nHonestly the more useful first step is defining what a qualified meeting actually means for {{companyName}} \u2014 because that shapes everything else.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "results_question": {
+      "description": "Prospect asks what results, meeting volume, ROI, or outcome to expect.",
+      "signals": [
+        "what results",
+        "ROI",
+        "how many meetings",
+        "success rate",
+        "what should we expect",
+        "average meetings"
+      ],
+      "send_reply": true,
+      "word_count": "90-130 words.",
+      "template": "Hey {{firstName}}, good question.\n\nFor the right-fit campaigns, we're typically targeting 10 to 20 qualified sales conversations per month \u2014 depending on ICP complexity, market size, offer clarity, and how quickly we validate messaging.\n\nThe focus is qualified conversations, not activity. Replies get filtered before they reach your calendar.\n\nI can walk you through what a realistic meeting flow looks like for {{companyName}}.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "already_have_solution": {
+      "description": "Prospect says they already have an agency, SDR, vendor, process, or internal team.",
+      "signals": [
+        "already have a vendor",
+        "we already do this",
+        "handled internally",
+        "we have SDRs",
+        "we have an agency"
+      ],
+      "send_reply": true,
+      "word_count": "70-110 words.",
+      "template": "Hey {{firstName}}, makes sense.\n\nA lot of companies we speak with already have some form of outbound, SDRs, or agency support in place.\n\nWhere Ascendly usually adds something is around missed visitor capture, tighter ICP targeting, retargeting engaged prospects, and making sure qualified conversations aren't slipping through.\n\nWorth 15 minutes to compare notes and see if there's a gap?\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
+    },
+    "timing_not_now": {
+      "description": "Prospect says timing is bad but does not reject permanently.",
+      "signals": [
+        "not right now",
+        "bad timing",
+        "circle back later",
+        "next quarter",
+        "maybe later"
+      ],
+      "send_reply": true,
+      "word_count": "40-70 words. Keep it short. No pressure.",
+      "template": "Hey {{firstName}}, understood \u2014 timing matters with this kind of work.\n\nShould I check back around {{future_timeframe}}, or is this just not a priority for {{companyName}} right now?"
+    },
+    "referral_request": {
+      "description": "Prospect says someone else is the right person.",
+      "signals": [
+        "wrong person",
+        "talk to",
+        "contact",
+        "loop in",
+        "speak with"
+      ],
+      "send_reply": true,
+      "word_count": "30-60 words.",
+      "template": "Hey {{firstName}}, appreciate you flagging that.\n\nWould you be open to a quick intro to {{referred_person_or_role}}, or should I reach out directly and mention your name?"
+    },
+    "human_review_needed": {
+      "description": "Ambiguous, sensitive, legal-heavy, angry, highly technical, or not safely classifiable.",
+      "send_reply": false,
+      "action": "Do not send. Alert human reviewer."
+    },
+    "out_of_context_question": {
+      "description": "Prospect asks something unexpected, off-topic, or a clarification that does not fit any other intent \u2014 including questions about what exactly was pitched, what the service covers, or anything not covered above.",
+      "signals": [
+        "are you referring to",
+        "what exactly",
+        "do you mean",
+        "is this about",
+        "can you clarify",
+        "what is this",
+        "what do you do exactly",
+        "I'm not sure I understand"
+      ],
+      "send_reply": true,
+      "send_reply_never_blank": true,
+      "word_count": "60-110 words. Match their length and tone.",
+      "style_rules": [
+        "Answer their exact question first \u2014 directly and simply. Do not dodge it.",
+        "Do not open with a compliment or filler.",
+        "Once the question is answered, briefly explain what Ascendly does in one or two sentences \u2014 only enough to give context.",
+        "If it makes sense, tie what you just explained back to what they might be dealing with.",
+        "End with a natural next step \u2014 a soft offer for a call, or a time suggestion.",
+        "Never return a blank reply. If the question is truly unclear, acknowledge it and ask one clarifying question."
+      ],
+      "template": "Hey {{firstName}}, [answer their exact question in one direct sentence].\n\n[One or two sentences explaining what Ascendly actually does, tied to what they just asked \u2014 keep it relevant, not a full pitch.]\n\n[If natural: Worth a quick call to see if there is a fit? {{proposed_time_1}} or {{proposed_time_2}} work?]",
+      "template_note": "The brackets are thinking prompts, not literal placeholders. Read what they asked, answer it like a person would, then bring it back to Ascendly naturally. The call offer should only appear if it flows naturally. Never leave main_reply blank.",
+      "example": {
+        "prospect_asks": "Are you referring to cold email?",
+        "good_reply": "Hey James, partly yes \u2014 cold email is one piece of it.\n\nAscendly runs the full outbound side: targeted list building, AI-personalized email sequences, LinkedIn outreach, retargeting engaged prospects, and qualifying replies before meetings hit your calendar.\n\nWorth a quick call to see if it fits what you are trying to build?\n\nMonday around 10 or 11, or Tuesday around noon work?"
+      }
     }
   },
+  "call_agenda_examples": [
+    "how visitor identification works",
+    "how missed inbound opportunities are routed into outreach",
+    "how outbound lists are sourced and qualified",
+    "what messaging angles could work for {{companyName}}",
+    "how retargeting engaged prospects supports email replies",
+    "how reply qualification works before booking",
+    "what meeting flow is realistic for your market"
+  ],
   "followups": {
+    "general_followup_tone": "Follow-ups should feel like a real person checking in, not a drip sequence. Each one should feel slightly different in energy \u2014 not all the same opener, not all the same length. If a previous message got no response, acknowledge it lightly once and move on.",
     "followup_1": {
       "send_after": "1 working day after main reply",
       "max_words": 80,
-      "template": "Hey {{firstName}},\n\n{{light_contextual_reference_or_question}}\n\nI shared a couple of times last time but never saw a confirmation come through, so I wanted to check back before the conversation goes cold.\n\nThe goal here is simply to see whether {{companyName}} could benefit from turning more existing traffic and outbound activity into qualified sales conversations consistently.\n\nDoes {{previous_proposed_time_1}} or {{previous_proposed_time_2}} still work for you? If not, happy to adjust around your schedule."
+      "template": "Hey {{firstName}},\n\n{{light_contextual_reference_or_question}}\n\nI shared a couple of times last message but never got confirmation \u2014 wanted to check before the thread went cold.\n\n{{previous_proposed_time_1}} or {{previous_proposed_time_2}} still work? Happy to adjust if not."
     },
     "followup_2": {
       "send_after": "2 working days after followup_1",
       "max_words": 90,
-      "template": "Hey {{firstName}},\n\nStill interested in learning whether {{companyName}} is currently focused on creating a more predictable pipeline of qualified sales conversations.\n\nAscendly helps companies maximize existing marketing and outbound efforts by identifying missed opportunities from inbound traffic while also running highly targeted outbound campaigns in parallel.\n\nThe goal is not to add another marketing layer, but to ensure current efforts are utilized fully and consistently generate qualified conversations.\n\nWould {{proposed_time_1}} or {{proposed_time_2}} work for a quick conversation?"
+      "template": "Hey {{firstName}},\n\nStill curious whether {{companyName}} is focused on building a more consistent pipeline of qualified sales conversations.\n\nAscendly helps companies get more out of existing marketing and outbound \u2014 identifying missed inbound opportunities while running targeted outbound in parallel.\n\nNot about adding another layer. About making sure what's already running actually converts.\n\n{{proposed_time_1}} or {{proposed_time_2}} work for a quick conversation?"
     },
     "followup_3": {
       "send_after": "2 working days after followup_2",
       "max_words": 100,
-      "template": "Hey {{firstName}},\n\nWanted to circle back because I genuinely think there may be an opportunity for {{companyName}} to generate more qualified conversations without increasing ad spend or relying entirely on referrals.\n\nWe help companies identify ideal prospects already interacting with their website or campaigns, route them into personalized outreach quickly, and combine that with targeted outbound campaigns built around your ICP.\n\nI’d be glad to walk you through the system, campaign structure, messaging approach, and what kind of meeting flow could realistically make sense for your market.\n\nDoes {{proposed_time_1}} or {{proposed_time_2}} work?"
+      "template": "Hey {{firstName}},\n\nWanted to circle back \u2014 I genuinely think there's an opportunity for {{companyName}} to generate more qualified conversations without increasing ad spend or relying entirely on referrals.\n\nWe help companies identify ideal prospects already interacting with their site or campaigns, route them into personalized outreach quickly, and combine that with targeted outbound built around your ICP.\n\nHappy to walk you through the system, the campaign structure, and what kind of meeting flow could realistically work for your market.\n\n{{proposed_time_1}} or {{proposed_time_2}} work?"
     },
     "followup_4": {
       "send_after": "3 working days after followup_3",
       "max_words": 90,
-      "template": "Hey {{firstName}},\n\nMost companies do not struggle because they lack traffic or lead sources.\n\nUsually, the issue is that existing opportunities are never fully captured, qualified, or re-engaged consistently.\n\nThat is exactly where Ascendly fits in. We help companies turn existing inbound activity and outbound efforts into a more controlled pipeline of qualified sales conversations.\n\nCurious if that lines up with what {{companyName}} is trying to improve right now?\n\nHappy to connect next week if it makes sense."
+      "template": "Hey {{firstName}},\n\nMost companies don't struggle because they lack traffic or lead sources.\n\nUsually the issue is that existing opportunities are never fully captured, qualified, or re-engaged consistently.\n\nThat's exactly where Ascendly fits. We help turn existing inbound activity and outbound efforts into a more controlled pipeline of qualified conversations.\n\nCurious if that lines up with what {{companyName}} is trying to improve?\n\nHappy to connect next week if it makes sense."
     },
     "followup_5": {
       "send_after": "2 working days after followup_4",
       "max_words": 80,
-      "template": "Hey {{firstName}},\n\nAt the core, Ascendly helps companies create a more predictable sales pipeline by combining personalized outbound campaigns with inbound opportunity capture.\n\nThe idea is not to generate more random traffic, but to make sure fewer qualified opportunities slip through the cracks while driving more sales conversations consistently.\n\nShould I just send over my calendar options and let you decide if a quick conversation makes sense?"
+      "template": "Hey {{firstName}},\n\nAt the core, Ascendly helps companies build a more predictable sales pipeline by combining personalized outbound with inbound opportunity capture.\n\nNot about generating more random traffic \u2014 about making sure fewer qualified opportunities slip through while driving more consistent conversations.\n\nShould I just send my calendar and let you decide if a quick call makes sense?"
     },
     "followup_6": {
       "send_after": "2 working days after followup_5",
       "max_words": 70,
-      "template": "Hey {{firstName}},\n\nI’ve reached out a few times but haven’t heard back, so I’m assuming improving pipeline consistency is probably not a priority for {{companyName}} right now, is that fair?\n\nEither way, appreciate the time and certainly do not want to be a pest."
+      "template": "Hey {{firstName}},\n\nI've reached out a few times without hearing back \u2014 so I'm guessing improving pipeline consistency isn't a priority for {{companyName}} right now. Fair?\n\nEither way, appreciate the time and don't want to be a pest."
     }
   },
   "placeholder_explanations": {
     "{{firstName}}": "Prospect first name.",
     "{{companyName}}": "Prospect company name.",
-    "{{targetBuyerPersona}}": "The ideal job role or demographic targeted by the client campaigns.",
-    "{{ultimate_business_outcome_you_help_them_achieve}}": "The high-level business result they care about.",
-    "{{3_to_4_relevant_call_agenda_items}}": "Specific things that make the call feel valuable and concrete.",
-    "{{light_contextual_reference_or_question}}": "A short contextual opener tied to the previous conversation.",
-    "{{previous_proposed_time_1}} / {{previous_proposed_time_2}}": "The exact time slots proposed previously.",
-    "{{proposed_time_1}} / {{proposed_time_2}}": "Fresh meeting times.",
-    "{{sendingAccountName}}": "Usually: Rosis"
+    "{{targetBuyerPersona}}": "Ideal buyer persona for the prospect.",
+    "{{proposed_time_1}}": "First working-day time option with 2 to 3 slots between 10 AM and 2 PM.",
+    "{{proposed_time_2}}": "Second working-day time option with 2 to 3 slots between 10 AM and 2 PM.",
+    "{{previous_proposed_time_1}}": "Previously offered time option.",
+    "{{previous_proposed_time_2}}": "Previously offered time option.",
+    "{{call_agenda_3_to_4_items}}": "Three or four call topics based on the prospect's question, market, and previous conversation.",
+    "{{light_contextual_reference_or_question}}": "Short opener tied to the previous conversation.",
+    "{{future_timeframe}}": "Specific follow-up timing such as next month, next quarter, or after your current campaign wraps up.",
+    "{{referred_person_or_role}}": "Person or role the prospect suggested."
   },
-  "intent_handling": {
-    "unsubscribe": {
-      "send_reply": false,
-      "action": "Do not send. Save log only."
-    },
-    "out_of_office_or_automated": {
-      "send_reply": false,
-      "action": "Do not send."
-    },
-    "human_review_needed": {
-      "send_reply": false,
-      "action": "Send human review alert."
-    },
-    "negative_not_interested": {
-      "send_reply": false,
-      "action": "Do not send unless a polite acknowledgement is clearly required."
-    },
-    "positive_interest": {
-      "send_reply": true,
-      "format": "positive_share_more_info"
-    },
-    "positive_with_context": {
-      "send_reply": true,
-      "format": "positive_with_context"
-    },
-    "meeting_ready": {
-      "send_reply": true,
-      "format": "meeting_ready"
-    },
-    "pricing_question": {
-      "send_reply": true,
-      "format": "pricing_question"
-    },
-    "case_study_or_proof_request": {
-      "send_reply": true,
-      "format": "proof_or_case_study"
-    }
-  },
-  "call_agenda_examples": [
-    "how {{companyName}} currently generates and handles qualified opportunities",
-    "where ideal prospects may be visiting your website or landing pages without converting",
-    "how we identify those missed visitors and route them into personalized cold email campaigns",
-    "how we source cold ICP lists and run targeted outbound campaigns in parallel",
-    "what messaging angles are most likely to get replies from {{targetBuyerPersona}}",
-    "what kind of qualified meeting flow {{companyName}} could realistically expect",
-    "how we qualify replies before booking meetings on your calendar",
-    "how we protect deliverability while scaling outbound volume"
-  ],
-  "goal_examples": [
-    "generate more qualified sales conversations",
-    "turn existing website traffic into booked sales calls",
-    "reduce missed opportunities from visitors who do not fill out forms",
-    "create a more consistent pipeline of qualified meetings",
-    "get in front of {{targetBuyerPersona}} before competitors do",
-    "increase booked calls without adding another SEO or ad effort",
-    "make current marketing and sales efforts work harder",
-    "build a predictable outbound channel without hiring internal SDRs"
-  ],
-  "friction_removal_examples": [
-    "to add another SEO or ad effort just to bring in more visitors",
-    "to add another tool your team has to manage",
-    "to replace your sales process",
-    "to create more manual work for your internal team",
-    "to send generic automated outreach",
-    "to rely on random lead lists",
-    "to book meetings with unqualified prospects",
-    "to flood your calendar with low-fit calls"
-  ],
   "core_positioning": {
-    "what_we_do": "Ascendly helps B2B companies generate qualified sales meetings by combining inbound opportunity capture with highly targeted cold email outreach.",
-    "how_we_do_it": "We identify ideal prospects visiting your website or landing pages, route them into personalized email campaigns, source cold ICP lists, run outbound campaigns, manage replies, qualify interest, and book meetings directly on your calendar.",
-    "what_we_do_not_do": "We are not adding another SEO, ad, or software tool for the team to manage. We focus on turning existing resources and targeted outbound into qualified sales conversations.",
-    "result": "The goal is to drive 10-20 qualified sales conversations each month with the kind of customers {{companyName}} actually wants to work with."
+    "what_we_do": "Ascendly helps B2B companies generate qualified sales meetings by combining inbound opportunity capture with targeted outbound, retargeting, and reply management.",
+    "how_we_do_it": "We identify ideal prospects visiting your website or landing pages, route them into personalized campaigns, source cold ICP lists, run outbound campaigns, retarget engaged prospects, manage replies, qualify interest, and book meetings directly on your calendar.",
+    "what_we_do_not_do": "We are not just adding another SEO, ad, or software tool for the team to manage. We focus on turning existing resources and targeted outbound into qualified sales conversations.",
+    "result": "The goal is to drive 10 to 20 qualified sales conversations each month with the kind of customers {{companyName}} actually wants to work with."
   }
 }
