@@ -308,6 +308,104 @@ tbody td { height:56px; font-size:13px; }
 /* buttons */
 .btn { border-radius:9px; }
 .btn.ok { background:var(--ok-soft); color:var(--ok); }
+
+/* ============ STITCH INDIGO THEME ============ */
+:root {
+  --primary:#4f46e5; --bg:#faf8ff; --panel:#ffffff; --surf-low:#f2f3ff; --surf:#eaedff;
+  --surf-high:#e2e7ff; --line:#e2e8f0; --txt:#1e293b; --muted:#505f76;
+  --accent:#4f46e5; --accent-soft:#eef2ff; --emerald:#10b981;
+  --ok:#166534; --ok-soft:#e7f7f0; --no:#ba1a1a; --no-soft:#ffdad6;
+  --blue:#4f46e5; --blue-soft:#e0e7ff; --violet:#6d28d9; --violet-soft:#f5f3ff;
+  --warn:#a8730a; --warn-soft:#fdf2dd; --muted-soft:#eef0f5;
+}
+body { background:var(--bg); font-family:'Inter',sans-serif; color:var(--txt); }
+.material-symbols-outlined { font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;
+                             vertical-align:middle; font-size:20px; }
+
+/* top nav (no sidebar) */
+.app { display:block; }
+.topnav { position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:22px;
+          height:64px; padding:0 26px; background:#fff; border-bottom:1px solid var(--line); }
+.topnav .brand { display:flex; align-items:center; gap:10px; }
+.topnav .brand .mark { color:var(--primary); font-size:20px; }
+.topnav .brand h1 { font-size:17px; font-weight:600; margin:0; color:var(--txt); }
+.topnav .brand p { font-size:11px; color:var(--muted); margin:0; }
+.topnav .tabs { display:flex; gap:4px; margin-left:8px; }
+.topnav .tabs a { font-size:13px; font-weight:600; color:var(--muted); padding:8px 12px; border-radius:8px; border:none; }
+.topnav .tabs a:hover { background:var(--surf-low); color:var(--txt); }
+.topnav .tabs a.active { color:var(--primary); background:var(--accent-soft); }
+.topnav .rt { margin-left:auto; display:flex; align-items:center; gap:16px; }
+.bell { position:relative; color:var(--muted); cursor:pointer; }
+.bell .bdot { position:absolute; top:-1px; right:-1px; width:8px; height:8px; background:var(--no); border-radius:50%; border:2px solid #fff; }
+.avatar { width:32px; height:32px; border-radius:50%; background:var(--primary); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; }
+.wrap2 { max-width:1280px; margin:0 auto; padding:26px 28px 80px; }
+.secthead { display:flex; align-items:center; justify-content:space-between; margin:0 0 14px; }
+.secthead h2 { font-size:17px; font-weight:600; margin:0; }
+.secthead .sub2 { font-size:12px; color:var(--muted); }
+
+/* stat cards */
+.cards { display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:8px; }
+.stat { background:#fff; border:2px solid var(--line); border-radius:14px; padding:16px; height:auto;
+        cursor:pointer; transition:border-color .15s; box-shadow:none; display:block; }
+.stat:hover { border-color:var(--primary); }
+.stat .l { font-size:12px; font-weight:500; color:var(--muted); margin:0 0 4px; text-transform:none; letter-spacing:0; }
+.stat .n { font-size:26px; font-weight:700; color:var(--txt); line-height:1; }
+.stat .bar { margin-top:14px; height:4px; background:var(--surf-low); border-radius:99px; overflow:hidden; }
+.stat .bar i { display:block; height:100%; background:var(--primary); border-radius:99px; }
+.stat.is-booked { border-color:var(--primary); }
+.stat.is-booked .l { color:var(--primary); font-weight:700; }
+.stat.is-review { border-color:var(--no); }
+.stat.is-review .l { color:var(--no); font-weight:700; }
+.stat.is-review .bar i { background:var(--no); }
+.stat.is-muted { opacity:.65; }
+
+/* filters */
+.filterbar { background:#fff; border:1px solid var(--line); border-radius:12px; }
+
+/* table */
+.tablewrap { background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:none; }
+thead th { background:var(--surf-low); color:var(--muted); font-size:12px; font-weight:600;
+           text-transform:none; letter-spacing:0; padding:12px 18px; }
+tbody td { padding:13px 18px; height:auto; }
+.lead-cell { display:flex; align-items:center; gap:12px; }
+.lead-ava { width:38px; height:38px; border-radius:50%; background:var(--blue-soft); color:var(--primary);
+            display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex:0 0 38px; }
+.lead-nm { font-weight:600; font-size:14px; color:var(--txt); }
+.lead-sub { font-size:12px; color:var(--muted); }
+.intent-cell { display:flex; align-items:center; gap:7px; font-size:13px; }
+.idot { width:8px; height:8px; border-radius:50%; background:#c7c4d8; flex:0 0 8px; }
+.idot.pos { background:var(--emerald); }
+.eye { width:36px; height:36px; border:1px solid var(--line); background:#fff; border-radius:50%;
+       display:inline-flex; align-items:center; justify-content:center; color:var(--primary); cursor:pointer; }
+.eye:hover { box-shadow:0 2px 10px rgba(79,70,229,.2); }
+
+/* pills */
+.pill { border-radius:99px; font-size:11px; font-weight:700; padding:4px 11px; }
+.pill.ok { background:var(--ok-soft); color:#166534; }
+.pill.blue { background:var(--surf-high); color:var(--primary); }
+.pill.violet { background:var(--violet-soft); color:var(--violet); }
+.pill.no { background:var(--no-soft); color:var(--no); text-transform:uppercase; letter-spacing:.04em; }
+.pill.muted { background:var(--surf-high); color:var(--muted); }
+.pill.warn { background:var(--warn-soft); color:var(--warn); }
+
+/* AI banner */
+.banner { margin-top:22px; background:var(--primary); color:#fff; border-radius:14px; padding:22px 24px;
+          position:relative; overflow:hidden; box-shadow:0 10px 28px rgba(79,70,229,.25); }
+.banner h4 { margin:0 0 4px; font-size:17px; font-weight:700; }
+.banner p { margin:0 0 14px; color:rgba(255,255,255,.85); max-width:560px; font-size:13px; }
+.banner .bbtn { background:#fff; color:var(--primary); border:none; border-radius:8px; padding:9px 18px;
+                font-weight:700; font-size:12px; cursor:pointer; }
+.banner .bgico { position:absolute; right:14px; top:-14px; font-size:140px; opacity:.12; }
+
+/* misc */
+.btn { background:var(--primary); }
+.btn.sec { background:#fff; color:var(--txt); border:1px solid var(--line); }
+.btn.ok { background:var(--ok-soft); color:#166534; }
+.ws-btn { background:#fff; border:1px solid var(--line); }
+.pager .cur { background:var(--primary); border-color:var(--primary); }
+.linkbtn { color:var(--primary); }
+@media (max-width:1000px){ .cards{grid-template-columns:repeat(2,1fr);} }
 """
 
 # (icon_key, tooltip, href, active_key)
@@ -419,14 +517,9 @@ def layout(title, active, body, current_ws="", with_drawer=False):
     user = os.getenv("DASHBOARD_USER", "admin")
     initials = (user[:2] or "AD").upper()
 
-    side = ""
-    for icon_key, tip, href, key in SIDEBAR_ITEMS:
-        cls = "active" if key == active else ""
-        side += (f'<a class="{cls}" href="{href}">{icon(icon_key)}'
-                 f'<span class="tip">{e(tip)}</span></a>')
-
     tabs = ""
     for label, href, key in [("Reply Manager", "/dashboard", "reply"),
+                             ("Meetings", "/dashboard?stage=booked", "booked"),
                              ("Workspaces", "/dashboard/workspaces", "workspaces"),
                              ("Settings", "/dashboard/settings", "settings")]:
         cls = "active" if key == active else ""
@@ -449,25 +542,23 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
 <title>{e(title)}</title><style>{PAGE_CSS}</style></head><body>
 <div class="app">
-  <div class="sidebar">
-    <div class="logo">⚡</div>
-    <div class="navi">{side}</div>
-    <a class="logoutlink" href="/dashboard/logout">{icon("logout")}<span class="tip">Logout</span></a>
-    <div class="mewrap">
-      <div class="ava-dot">{e(initials)}</div>
-      <span class="tip"><b>{e(user)}</b><span>{e(current_ws or "All workspaces")}</span></span>
+  <div class="topnav">
+    <div class="brand">
+      <span class="material-symbols-outlined mark">bolt</span>
+      <div><h1>Reply Manager</h1><p>Process replies &amp; review AI suggestions</p></div>
     </div>
-  </div>
-  <div class="main">
-    <div class="topbar">
-      <div class="tabs">{tabs}</div>
+    <div class="tabs">{tabs}</div>
+    <div class="rt">
       {workspace_switcher(current_ws)}
+      <span class="bell"><span class="material-symbols-outlined">notifications</span><span class="bdot"></span></span>
+      <a class="avatar" href="/dashboard/logout" title="{e(user)} — log out">{e(initials)}</a>
     </div>
-    <div class="content">{body}</div>
   </div>
+  <div class="wrap2">{body}</div>
 </div>
 {drawer}
 <script>{DRAWER_JS}</script>
@@ -501,6 +592,20 @@ def soon(request: Request, name: str = "This section", _: str = Depends(require_
     <p class="sub">This section is coming soon.</p>
     <div class="empty">🚧 <b>{e(name)}</b> isn't wired up yet.<br>It will live here as the platform grows.</div>"""
     return HTMLResponse(layout(name, "reply", body, current_ws=request.cookies.get("ws", "")))
+
+
+def avatar_initials(name, email):
+    s = (name or email or "?").strip()
+    parts = s.split()
+    if len(parts) >= 2:
+        return (parts[0][:1] + parts[1][:1]).upper()
+    return s[:2].upper()
+
+
+def intent_dot(intent):
+    i = (intent or "").lower()
+    pos = any(k in i for k in ["positive", "interest", "share", "meeting", "yes", "book"])
+    return f'<span class="idot {"pos" if pos else ""}"></span>'
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -542,26 +647,30 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     body_rows = ""
     for ld in rows:
         when = ld.created_at.strftime("%b %d, %H:%M") if ld.created_at else ""
+        sub2 = " • ".join([x for x in [ld.company, ld.campaign] if x])
+        sub2_html = f'<div class="lead-sub">{e(sub2)}</div>' if sub2 else ""
         body_rows += f"""<tr>
-          <td><input type="checkbox" class="rowchk" value="{ld.id}" onchange="rowChecked()"></td>
-          <td class="small muted">{e(when)}</td>
-          <td>{e(ld.workspace_name)}</td>
-          <td>{e(ld.name) or '<span class="muted">-</span>'}</td>
-          <td class="small">{e(ld.email)}</td>
-          <td class="small">{e(ld.company) or '<span class="muted">-</span>'}</td>
-          <td class="small">{e(ld.campaign) or '<span class="muted">-</span>'}</td>
-          <td>{e(ld.intent) or '<span class="muted">-</span>'}</td>
-          <td>{e(ld.confidence)}</td>
+          <td style="width:34px"><input type="checkbox" class="rowchk" value="{ld.id}" onchange="rowChecked()"></td>
+          <td>
+            <div class="lead-cell">
+              <div class="lead-ava">{e(avatar_initials(ld.name, ld.email))}</div>
+              <div>
+                <div class="lead-nm">{e(ld.name) or e(ld.email) or 'Lead'}</div>
+                <div class="lead-sub">{e(ld.email)}</div>
+                {sub2_html}
+              </div>
+            </div>
+          </td>
+          <td><div class="intent-cell">{intent_dot(ld.intent)}<span>{e(ld.intent) or '-'}</span></div></td>
           <td>{stage_badge(ld.stage)}</td>
-          <td>{action_badge(ld.action)}</td>
           <td>{reply_badge(ld)}</td>
-          <td>{fup_badge(ld)}</td>
           <td>{review_badge(ld)}</td>
-          <td><button class="linkbtn" onclick="openDrawer({ld.id})">View</button></td>
+          <td class="small muted">{e(when)}</td>
+          <td style="text-align:right"><button class="eye" onclick="openDrawer({ld.id})" title="View"><span class="material-symbols-outlined">visibility</span></button></td>
         </tr>"""
 
     if not rows:
-        body_rows = ('<tr><td colspan="15"><div class="empty">No replies found.<br>'
+        body_rows = ('<tr><td colspan="8"><div class="empty">No replies found.<br>'
                      'Try changing filters or wait for new replies to sync.</div></td></tr>')
 
     # ---- pagination ----
@@ -584,25 +693,48 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
         pager += '</div>'
 
     lead_ids = [ld.id for ld in rows]
+    tot = counts['total'] or 1
 
-    def card(n, label, **override):
+    def card(n, label, kind="", **override):
         params = {k: v for k, v in base_params.items() if k not in ("status", "stage", "page")}
         params.update({k: v for k, v in override.items() if v})
         href = "/dashboard?" + urlencode(params)
-        return f'<div class="stat click" onclick="location.href=\'{href}\'"><div class="n">{n}</div><div class="l">{label}</div></div>'
+        cls = {"booked": "is-booked", "review": "is-review", "stopped": "is-muted"}.get(kind, "")
+        pct = min(100, int(n / tot * 100))
+        return (f'<div class="stat {cls}" onclick="location.href=\'{href}\'">'
+                f'<div class="l">{label}</div><div class="n">{n}</div>'
+                f'<div class="bar"><i style="width:{pct}%"></i></div></div>')
+
+    # AI smart-sorting banner
+    banner = ""
+    if counts['needs_review'] and stage != "booked":
+        nr = "/dashboard?" + urlencode({**{k: v for k, v in base_params.items()
+                                            if k not in ("status", "stage", "page")}, "status": "needs_review"})
+        banner = f"""
+        <div class="banner">
+          <span class="material-symbols-outlined bgico">insights</span>
+          <h4>AI Smart Sorting</h4>
+          <p>Your dashboard is prioritizing {counts['needs_review']} lead(s) that need review so you can follow up fast.</p>
+          <a class="bbtn" href="{nr}">View priorities</a>
+        </div>"""
 
     title = "Meeting Booked" if stage == "booked" else "Reply Manager"
     body = f"""
-    <h1>{e(title)}</h1>
-    <p class="sub">Process replies, review AI suggestions, push follow-ups, and track which leads book.</p>
-
+    <div class="secthead">
+      <h2>Performance Overview</h2>
+    </div>
     <div class="cards">
-      {card(counts['total'], 'Total replies')}
+      {card(counts['total'], 'Total Replies')}
       {card(counts['replied'], 'Replied', status='replied')}
-      {card(counts['booked'], 'Meeting Booked', stage='booked')}
-      {card(counts['needs_review'], 'Needs review', status='needs_review')}
-      {card(counts['enriched'], 'Follow-ups added', status='enriched')}
-      {card(counts['stopped'], 'Stopped', status='stopped')}
+      {card(counts['booked'], 'Meeting Booked', 'booked', stage='booked')}
+      {card(counts['needs_review'], 'Needs Review', 'review', status='needs_review')}
+      {card(counts['enriched'], 'Follow-ups', status='enriched')}
+      {card(counts['stopped'], 'Stopped', 'stopped', status='stopped')}
+    </div>
+
+    <div class="secthead" style="margin-top:26px">
+      <h2>{e(title) if stage=='booked' else 'Recent Leads Activity'}</h2>
+      <a class="btn sm" href="/dashboard/export?{urlencode(base_params)}">Export CSV</a>
     </div>
 
     <form class="filterbar" id="filterform" method="get" action="/dashboard">
@@ -631,8 +763,8 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
       <table>
         <thead><tr>
           <th><input type="checkbox" onchange="toggleAll(this)"></th>
-          <th>When</th><th>Workspace</th><th>Lead</th><th>Email</th><th>Company</th><th>Campaign</th>
-          <th>Intent</th><th>Conf</th><th>Stage</th><th>Action</th><th>Reply</th><th>FUP</th><th>Review</th><th></th>
+          <th>Lead &amp; Company</th><th>Intent</th><th>Stage</th><th>Reply</th>
+          <th>Review</th><th>When</th><th style="text-align:right">Actions</th>
         </tr></thead>
         <tbody>{body_rows}</tbody>
       </table>
@@ -640,8 +772,8 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     {pager}
     <div class="flex" style="margin-top:12px">
       <span class="muted small">{total} result(s)</span>
-      <a class="btn sec sm right" href="/dashboard/export?{urlencode(base_params)}">Export all (CSV)</a>
     </div>
+    {banner}
     <script>window.__LEAD_IDS__ = {json.dumps(lead_ids)};</script>
     """
     active_key = "booked" if stage == "booked" else "reply"
