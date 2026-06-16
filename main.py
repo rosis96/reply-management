@@ -1056,33 +1056,48 @@ def get_instantly_lead_id(email, campaign_id, api_key):
         return None
 
 
-def get_latest_instantly_email_id(email, campaign_id, api_key):
+def _email_from_addr(item):
+    return str(item.get("from_address_email") or item.get("from_email")
+               or item.get("from") or "").lower()
+
+
+def find_instantly_reply_target(email, campaign_id, api_key):
+    """Return (reply_to_uuid, eaccount) for the PROSPECT's latest inbound email.
+
+    Instantly addresses a reply to the sender of the email you reply into. If we
+    reply to our own last sent message, it goes back to our own account. So we
+    pick the latest email that is FROM the prospect, and use that email's
+    `eaccount` (the mailbox that received it) as the sending account.
+    """
     url = "https://api.instantly.ai/api/v2/emails"
-
-    params = {
-        "search": email,
-        "campaign_id": campaign_id,
-        "limit": 10
-    }
-
-    response = requests.get(url, headers=instantly_headers(api_key), params=params)
-
-    log(f"Instantly email lookup: {response.status_code}")
+    params = {"search": email, "campaign_id": campaign_id, "limit": 25}
 
     try:
-        data = response.json()
-        items = data.get("items", [])
-
-        if not items:
-            log(f"No Instantly email found for {email}")
-            return None
-
-        return items[0].get("id")
-
+        response = requests.get(url, headers=instantly_headers(api_key), params=params)
+        log(f"Instantly email lookup: {response.status_code}")
+        items = response.json().get("items", [])
     except Exception as e:
         log(f"Instantly email lookup failed: {str(e)}")
-        log(response.text)
-        return None
+        return None, ""
+
+    if not items:
+        log(f"No Instantly email found for {email}")
+        return None, ""
+
+    target = (email or "").lower()
+    inbound = [it for it in items if target and target in _email_from_addr(it)]
+    chosen = inbound[0] if inbound else items[0]
+
+    if not inbound:
+        log(f"No inbound email from {email} found; falling back to latest email in thread.")
+
+    return chosen.get("id"), (chosen.get("eaccount") or "")
+
+
+def get_latest_instantly_email_id(email, campaign_id, api_key):
+    """Backwards-compatible: returns just the reply target uuid."""
+    uuid, _ = find_instantly_reply_target(email, campaign_id, api_key)
+    return uuid
 
 
 def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
@@ -1313,23 +1328,27 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         return
 
     send_result = None
+    eaccount = sender_email  # default; refined below from the inbound email
 
     if action == "send":
-        reply_to_uuid = get_latest_instantly_email_id(
+        reply_to_uuid, thread_eaccount = find_instantly_reply_target(
             email=email,
             campaign_id=campaign_id,
             api_key=instantly_api_key
         )
+        # Prefer the account that actually received the prospect's reply.
+        eaccount = thread_eaccount or sender_email
+        log(f"Instantly reply target uuid={reply_to_uuid}, eaccount={eaccount}")
 
         if reply_to_uuid:
-            if not sender_email:
-                log("No sender email found. Skipping reply send to avoid wrong sender.")
+            if not eaccount:
+                log("No sending account found. Skipping reply send to avoid wrong sender.")
             else:
-                log("Simple positive intent. Sending Instantly main reply...")
+                log("Sending Instantly reply to the prospect's inbound email...")
                 send_result = send_instantly_reply(
                     reply_to_uuid=reply_to_uuid,
                     message=ai_result.get("main_reply", ""),
-                    eaccount=sender_email,
+                    eaccount=eaccount,
                     subject=subject,
                     api_key=instantly_api_key
                 )
@@ -1367,7 +1386,7 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         lead_data=lead_data,
         send_meta={
             "campaign_id": campaign_id,
-            "eaccount": sender_email,
+            "eaccount": eaccount,
             "email": email,
             "subject": subject,
         },
