@@ -26,6 +26,56 @@ REPLY_DELAY_SECONDS = 420
 PROCESSED_FILE = "logs/processed_replies.json"
 
 
+# -------------------------
+# Reply routing
+# -------------------------
+# Only these "simple positive" intents get an AUTO-SENT reply to the prospect.
+# Everything else (case studies, pricing, proof, off-topic, objections, etc.)
+# is left for a human to answer manually, but the lead is STILL enriched with
+# follow-up variables and pushed into the follow-up campaign.
+AUTO_SEND_INTENTS = {
+    "positive_interest",
+    "positive_share_more",
+    "positive_share_more_info",
+    "share_more",
+    "yes_interested",
+    "meeting_ready",
+}
+
+# These never get a reply AND never get pushed to follow-up (opt-out / junk).
+STOP_INTENTS = {
+    "unsubscribe",
+    "negative_not_interested",
+    "not_interested",
+    "out_of_office_or_automated",
+    "out_of_office",
+    "automated",
+    "wrong_person",
+}
+
+
+def decide_reply_action(ai_result):
+    """Return one of: 'send', 'skip_enrich', 'stop'.
+
+    send        -> auto-reply the prospect + enrich + push to follow-up
+    skip_enrich -> do NOT reply (human handles it) but still enrich + push to follow-up
+    stop        -> do nothing (opt-out, out-of-office, automated, wrong person)
+    """
+    intent = str(ai_result.get("intent", "")).strip().lower()
+
+    if intent in STOP_INTENTS:
+        return "stop"
+
+    # Out-of-office / automated / wrong-person are flagged by the model here.
+    if ai_result.get("human_review_needed") is True:
+        return "stop"
+
+    if intent in AUTO_SEND_INTENTS:
+        return "send"
+
+    return "skip_enrich"
+
+
 def log(message):
     print(f"[{datetime.now()}] {message}", flush=True)
 
@@ -671,28 +721,32 @@ def process_reply(lead_id, workspace_name):
             website
         )
 
-    if ai_result.get("intent") == "unsubscribe":
-        log("Unsubscribe detected. Not sending.")
+    action = decide_reply_action(ai_result)
+    log(f"Reply action: {action} (intent={ai_result.get('intent')})")
+
+    if action == "stop":
+        log("Stop intent (opt-out / out-of-office / automated / wrong person). Not sending, not enriching.")
         save_processed_reply(reply_id)
         return
 
-    if ai_result.get("human_review_needed") is True:
-        log("Human review needed. Not sending.")
-        notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result)
-        save_processed_reply(reply_id)
-        return
+    send_result = None
 
-    log("Sending immediate reply through EmailBison...")
-    send_result = send_reply_to_bison(
-        reply_id=reply_id,
-        message=format_email_for_bison(ai_result.get("main_reply", "")),
-        sender_email_id=latest_reply["sender_email_id"],
-        to_name=latest_reply["from_name"],
-        to_email=latest_reply["from_email_address"],
-        api_key=workspace_bison_api_key
-    )
-
-    if send_result:
+    if action == "send":
+        log("Simple positive intent. Sending immediate reply through EmailBison...")
+        send_result = send_reply_to_bison(
+            reply_id=reply_id,
+            message=format_email_for_bison(ai_result.get("main_reply", "")),
+            sender_email_id=latest_reply["sender_email_id"],
+            to_name=latest_reply["from_name"],
+            to_email=latest_reply["from_email_address"],
+            api_key=workspace_bison_api_key
+        )
+        if send_result:
+            save_processed_reply(reply_id)
+    else:
+        # skip_enrich: complex reply, a human will answer it manually.
+        # We still enrich the lead and push it into the follow-up campaign.
+        log("Complex intent. Skipping auto-reply (human handles it). Enriching follow-ups only.")
         save_processed_reply(reply_id)
 
     log("Updating lead custom variables...")
@@ -714,6 +768,8 @@ def process_reply(lead_id, workspace_name):
         "lead_id": lead_id,
         "reply_id": reply_id,
         "workspace_name": workspace_name,
+        "action": action,
+        "replied": bool(send_result),
         "thread": thread,
         "sender_email": sender_email,
         "sender_name": sender_name,
@@ -931,9 +987,12 @@ def process_instantly_reply(payload):
             website
         )
 
-    if ai_result.get("intent") == "unsubscribe":
-        log("Instantly unsubscribe detected. Not sending.")
-        save_log(f"instantly_unsubscribe_{lead_id}.json", {
+    action = decide_reply_action(ai_result)
+    log(f"Instantly reply action: {action} (intent={ai_result.get('intent')})")
+
+    if action == "stop":
+        log("Instantly stop intent (opt-out / out-of-office / automated / wrong person). Not sending, not enriching.")
+        save_log(f"instantly_stop_{lead_id}.json", {
             "lead_id": lead_id,
             "email": email,
             "payload": payload,
@@ -941,34 +1000,34 @@ def process_instantly_reply(payload):
         })
         return
 
-    if ai_result.get("human_review_needed") is True:
-        log("Instantly human review needed. Not sending.")
-        notify_human_review(lead_id, "instantly", workspace_name, thread, ai_result)
-        return
-
-    reply_to_uuid = get_latest_instantly_email_id(
-        email=email,
-        campaign_id=campaign_id,
-        api_key=instantly_api_key
-    )
-
     send_result = None
 
-    if reply_to_uuid:
-        if not sender_email:
-            log("No sender email found. Skipping reply send to avoid wrong sender.")
+    if action == "send":
+        reply_to_uuid = get_latest_instantly_email_id(
+            email=email,
+            campaign_id=campaign_id,
+            api_key=instantly_api_key
+        )
+
+        if reply_to_uuid:
+            if not sender_email:
+                log("No sender email found. Skipping reply send to avoid wrong sender.")
+            else:
+                log("Simple positive intent. Sending Instantly main reply...")
+                send_result = send_instantly_reply(
+                    reply_to_uuid=reply_to_uuid,
+                    message=ai_result.get("main_reply", ""),
+                    eaccount=sender_email,
+                    subject=subject,
+                    api_key=instantly_api_key
+                )
+                log(f"Instantly send result: {send_result}")
         else:
-            log("Sending Instantly main reply...")
-            send_result = send_instantly_reply(
-                reply_to_uuid=reply_to_uuid,
-                message=ai_result.get("main_reply", ""),
-                eaccount=sender_email,
-                subject=subject,
-                api_key=instantly_api_key
-            )
-            log(f"Instantly send result: {send_result}")
+            log("No reply_to_uuid found. Skipping reply send.")
     else:
-        log("No reply_to_uuid found. Skipping reply send.")
+        # skip_enrich: complex reply, a human will answer it manually.
+        # We still enrich the lead + apply the FUP1 label below.
+        log("Complex intent. Skipping auto-reply (human handles it). Enriching follow-ups only.")
 
     log("Updating Instantly lead variables...")
     update_result = update_instantly_lead(
@@ -982,6 +1041,8 @@ def process_instantly_reply(payload):
         "email": email,
         "first_name": first_name,
         "campaign_id": campaign_id,
+        "action": action,
+        "replied": bool(send_result),
         "reply_text": reply_text,
         "sender_email": sender_email,
         "sender_name": sender_name,
