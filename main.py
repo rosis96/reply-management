@@ -1194,8 +1194,8 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     log("Processing Instantly reply webhook...")
     log(json.dumps(payload, indent=2))
 
-    email = payload.get("lead_email", "") or payload.get("email", "")
-    campaign_id = payload.get("campaign_id", "")
+    email = payload.get("lead_email", "") or payload.get("email", "") or payload.get("from_email", "")
+    campaign_id = payload.get("campaign_id", "") or payload.get("campaign", "") or payload.get("campaignId", "")
     first_name = payload.get("firstName", "")
     last_name = payload.get("lastName", "")
     full_name = (f"{first_name} {last_name}").strip() or first_name
