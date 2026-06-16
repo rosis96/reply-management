@@ -133,7 +133,7 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
                 ai_result, action, replied, fup_added,
                 latest_reply=None, name="", email="",
                 reply_text="", subject="", campaign="", thread=None,
-                company="", lead_data=None):
+                company="", lead_data=None, send_meta=None):
     """Write/update the lead row that powers the dashboard. Never raises."""
     try:
         if latest_reply:
@@ -166,6 +166,7 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
             followups=followups,
             thread=thread or [],
             lead_data=lead_data or {},
+            send_meta=send_meta or {},
         )
     except Exception as ex:
         log(f"Failed to record lead in dashboard DB: {ex}")
@@ -909,6 +910,12 @@ def process_reply(lead_id, workspace_name):
         replied=bool(send_result),
         fup_added=bool(update_result),
         thread=thread,
+        send_meta={
+            "reply_id": reply_id,
+            "sender_email_id": latest_reply.get("sender_email_id"),
+            "to_name": latest_reply.get("from_name"),
+            "to_email": latest_reply.get("from_email_address"),
+        },
     )
 
     final_log = {
@@ -1273,6 +1280,12 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         campaign=payload.get("campaign_name", ""),
         thread=thread,
         lead_data=lead_data,
+        send_meta={
+            "campaign_id": campaign_id,
+            "eaccount": sender_email,
+            "email": email,
+            "subject": subject,
+        },
     )
 
     final_log = {

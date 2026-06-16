@@ -132,6 +132,7 @@ class Lead(Base):
     followups = Column(Text, default="")                   # JSON list of follow-up drafts
     thread = Column(Text, default="")                      # JSON list of thread messages
     lead_data = Column(Text, default="")                   # JSON of all lead fields from the platform
+    send_meta = Column(Text, default="")                   # JSON: what's needed to re-send (ids/eaccount/etc.)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -163,6 +164,7 @@ def migrate():
         "followups": "TEXT",
         "thread": "TEXT",
         "lead_data": "TEXT",
+        "send_meta": "TEXT",
         "conf_num": "FLOAT",
         "reviewed": "BOOLEAN",
         "stage": "VARCHAR(40)",
@@ -411,6 +413,7 @@ def upsert_lead(
     followups=None,
     thread=None,
     lead_data=None,
+    send_meta=None,
 ):
     external_lead_id = str(external_lead_id or "")
     reply_id = str(reply_id or "")
@@ -452,6 +455,8 @@ def upsert_lead(
         lead.thread = json.dumps(thread or [])
         if lead_data is not None:
             lead.lead_data = json.dumps(lead_data or {})
+        if send_meta is not None:
+            lead.send_meta = json.dumps(send_meta or {})
 
         # Set a sensible default stage only on creation; never overwrite a
         # stage a human has already set (e.g. "booked") when re-processing.

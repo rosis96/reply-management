@@ -406,6 +406,42 @@ tbody td { padding:13px 18px; height:auto; }
 .pager .cur { background:var(--primary); border-color:var(--primary); }
 .linkbtn { color:var(--primary); }
 @media (max-width:1000px){ .cards{grid-template-columns:repeat(2,1fr);} }
+
+/* ============ SABROSSO LIGHT SIDEBAR ============ */
+.app { display:flex; min-height:100vh; }
+.lsidebar { width:252px; flex:0 0 252px; background:#fff; border-right:1px solid var(--line);
+            height:100vh; position:sticky; top:0; display:flex; flex-direction:column; padding:18px 14px; }
+.lbrand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:16px; color:var(--txt); padding:4px 8px 14px; }
+.lbrand .mark { color:var(--primary); }
+.lsec { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; padding:14px 10px 6px; }
+.lnav { display:flex; flex-direction:column; gap:2px; }
+.lnav a { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px; color:#475569;
+          font-size:13.5px; font-weight:500; }
+.lnav a .material-symbols-outlined { font-size:20px; color:#64748b; }
+.lnav a:hover { background:#f6f7fb; color:var(--txt); }
+.lnav a.active { background:var(--accent-soft); color:var(--primary); font-weight:600; }
+.lnav a.active .material-symbols-outlined { color:var(--primary); }
+.lnav .nlbl { flex:1; }
+.nbadge { background:#eef0f5; color:#64748b; font-size:11px; font-weight:700; border-radius:99px; padding:1px 8px; min-width:20px; text-align:center; }
+.nbadge.danger { background:var(--no-soft); color:var(--no); }
+.lspacer { flex:1; }
+.lnav-logout { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px; color:#64748b; font-size:13.5px; font-weight:500; }
+.lnav-logout:hover { background:#f6f7fb; color:var(--txt); }
+.lnav-logout .material-symbols-outlined { font-size:20px; }
+.luser { display:flex; align-items:center; gap:10px; padding:12px 8px 4px; margin-top:6px; border-top:1px solid var(--line); }
+.luser .lu-nm { font-weight:600; font-size:13px; }
+.luser .lu-ws { font-size:11px; color:var(--muted); }
+.lmain { flex:1; min-width:0; display:flex; flex-direction:column; }
+.ltop { height:64px; border-bottom:1px solid var(--line); background:#fff; display:flex; align-items:center;
+        gap:16px; padding:0 24px; position:sticky; top:0; z-index:30; }
+.lsearch { flex:1; max-width:440px; display:flex; align-items:center; gap:8px; background:#f6f7fb;
+           border:1px solid var(--line); border-radius:10px; padding:0 12px; height:38px; }
+.lsearch .material-symbols-outlined { color:#94a3b8; font-size:20px; }
+.lsearch input { border:none; background:transparent; height:36px; width:100%; font-size:13px; padding:0; }
+.lsearch input:focus { outline:none; }
+.ltop-rt { margin-left:auto; display:flex; align-items:center; gap:14px; }
+.lcontent { padding:24px 28px 80px; max-width:1280px; }
+@media (max-width:1000px){ .lsidebar{display:none;} }
 """
 
 # (icon_key, tooltip, href, active_key)
@@ -455,17 +491,30 @@ function drawerNav(step){
   openDrawer(LEAD_IDS[i]);
 }
 function leadAction(id, action){
-  var ta = document.getElementById('fup-edit');
+  var ta = document.getElementById('reply-edit');
   var ss = document.getElementById('stage-sel');
   var fd = new FormData();
   fd.append('action', action);
-  if(ta) fd.append('followup', ta.value);
+  if(ta) fd.append('reply', ta.value);
   if(ss) fd.append('stage', ss.value);
   if(action==='delete' && !confirm('Delete this lead? This cannot be undone.')) return;
   var reloaders = ['stop','mark_done','set_stage','mark_booked','delete'];
   return fetch('/dashboard/leads/'+id+'/action', {method:'POST', body:fd})
     .then(function(r){return r.json();})
     .then(function(d){ if(d && d.ok){ if(reloaders.indexOf(action)>-1){ location.reload(); } else { openDrawer(id); } } });
+}
+function sendReply(id){
+  var ta = document.getElementById('reply-edit');
+  var st = document.getElementById('send-status');
+  if(!confirm('Send this reply to the prospect now?')) return;
+  if(st){ st.textContent = 'Sending...'; }
+  var fd = new FormData(); fd.append('reply', ta ? ta.value : '');
+  fetch('/dashboard/leads/'+id+'/send', {method:'POST', body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.ok){ if(st){ st.textContent = 'Sent ✓'; } setTimeout(function(){ location.reload(); }, 700); }
+      else { if(st){ st.textContent = 'Send failed: ' + ((d && d.error) || 'unknown'); } }
+    }).catch(function(){ if(st){ st.textContent = 'Send failed (network).'; } });
 }
 function wsFilter(q){q=q.toLowerCase();document.querySelectorAll('.ws-item').forEach(function(el){el.style.display=el.textContent.toLowerCase().indexOf(q)>-1?'block':'none';});}
 function toggleWs(ev){var m=document.getElementById('wsmenu');m.classList.toggle('open');ev.stopPropagation();}
@@ -513,17 +562,44 @@ def workspace_switcher(current_ws):
     </div>"""
 
 
+def _nav_badge(count, danger=False):
+    if not count:
+        return ""
+    cls = "nbadge danger" if danger else "nbadge"
+    return f'<span class="{cls}">{count}</span>'
+
+
 def layout(title, active, body, current_ws="", with_drawer=False):
     user = os.getenv("DASHBOARD_USER", "admin")
     initials = (user[:2] or "AD").upper()
 
-    tabs = ""
-    for label, href, key in [("Reply Manager", "/dashboard", "reply"),
-                             ("Meetings", "/dashboard?stage=booked", "booked"),
-                             ("Workspaces", "/dashboard/workspaces", "workspaces"),
-                             ("Settings", "/dashboard/settings", "settings")]:
-        cls = "active" if key == active else ""
-        tabs += f'<a class="{cls}" href="{href}">{e(label)}</a>'
+    try:
+        counts = db.lead_counts(current_ws or None)
+    except Exception:
+        counts = {"total": 0, "needs_review": 0, "replied": 0, "booked": 0, "stopped": 0}
+
+    # (key, label, icon, href, badge_count, danger)
+    replies_nav = [
+        ("all", "All Replies", "dashboard", "/dashboard", counts.get("total", 0), False),
+        ("needs_review", "Needs Review", "flag", "/dashboard?status=needs_review", counts.get("needs_review", 0), True),
+        ("replied", "Replied", "reply", "/dashboard?status=replied", counts.get("replied", 0), False),
+        ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
+        ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
+    ]
+    manage_nav = [
+        ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
+        ("settings", "Settings", "settings", "/dashboard/settings", None, False),
+        ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
+    ]
+
+    def nav_links(items):
+        out = ""
+        for key, label, ic, href, badge, danger in items:
+            cls = "active" if key == active else ""
+            out += (f'<a class="{cls}" href="{href}">'
+                    f'<span class="material-symbols-outlined">{ic}</span>'
+                    f'<span class="nlbl">{e(label)}</span>{_nav_badge(badge, danger)}</a>')
+        return out
 
     drawer = ""
     if with_drawer:
@@ -546,19 +622,28 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
 <title>{e(title)}</title><style>{PAGE_CSS}</style></head><body>
 <div class="app">
-  <div class="topnav">
-    <div class="brand">
-      <span class="material-symbols-outlined mark">bolt</span>
-      <div><h1>Reply Manager</h1><p>Process replies &amp; review AI suggestions</p></div>
+  <aside class="lsidebar">
+    <div class="lbrand"><span class="material-symbols-outlined mark">bolt</span><span>Reply Manager</span></div>
+    <div class="lsec">Replies</div>
+    <nav class="lnav">{nav_links(replies_nav)}</nav>
+    <div class="lsec">Manage</div>
+    <nav class="lnav">{nav_links(manage_nav)}</nav>
+    <div class="lspacer"></div>
+    <a class="lnav-logout" href="/dashboard/logout"><span class="material-symbols-outlined">logout</span><span class="nlbl">Logout</span></a>
+    <div class="luser"><div class="avatar">{e(initials)}</div><div><div class="lu-nm">{e(user)}</div><div class="lu-ws">{e(current_ws or "All workspaces")}</div></div></div>
+  </aside>
+  <div class="lmain">
+    <div class="ltop">
+      <form method="get" action="/dashboard" class="lsearch">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" name="q" placeholder="Search name, email or company...">
+      </form>
+      <div class="ltop-rt">{workspace_switcher(current_ws)}
+        <span class="bell"><span class="material-symbols-outlined">notifications</span><span class="bdot"></span></span>
+      </div>
     </div>
-    <div class="tabs">{tabs}</div>
-    <div class="rt">
-      {workspace_switcher(current_ws)}
-      <span class="bell"><span class="material-symbols-outlined">notifications</span><span class="bdot"></span></span>
-      <a class="avatar" href="/dashboard/logout" title="{e(user)} — log out">{e(initials)}</a>
-    </div>
+    <div class="lcontent">{body}</div>
   </div>
-  <div class="wrap2">{body}</div>
 </div>
 {drawer}
 <script>{DRAWER_JS}</script>
@@ -591,7 +676,7 @@ def soon(request: Request, name: str = "This section", _: str = Depends(require_
     body = f"""<h1>{e(name)}</h1>
     <p class="sub">This section is coming soon.</p>
     <div class="empty">🚧 <b>{e(name)}</b> isn't wired up yet.<br>It will live here as the platform grows.</div>"""
-    return HTMLResponse(layout(name, "reply", body, current_ws=request.cookies.get("ws", "")))
+    return HTMLResponse(layout(name, "support", body, current_ws=request.cookies.get("ws", "")))
 
 
 def avatar_initials(name, email):
@@ -776,7 +861,12 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     {banner}
     <script>window.__LEAD_IDS__ = {json.dumps(lead_ids)};</script>
     """
-    active_key = "booked" if stage == "booked" else "reply"
+    if stage == "booked":
+        active_key = "booked"
+    elif status in ("needs_review", "replied", "stopped"):
+        active_key = status
+    else:
+        active_key = "all"
     return HTMLResponse(layout(title, active_key, body, current_ws=workspace, with_drawer=True))
 
 
@@ -861,7 +951,7 @@ def build_panel(ld):
     if not fups:
         fups = '<p class="muted">No follow-up drafts.</p>'
 
-    editable = followups[0] if followups else (ld.main_reply or "")
+    editable = ld.main_reply or (followups[0] if followups else "")
 
     stage_sel = '<select id="stage-sel">' + "".join(
         f'<option value="{v}"{" selected" if ld.stage==v else ""}>{l}</option>' for v, l in STAGE_DEFS) + "</select>"
@@ -904,15 +994,17 @@ def build_panel(ld):
     </div>
 
     <div class="card">
-      <h3>Edit recommended follow-up</h3>
-      <textarea id="fup-edit">{e(editable)}</textarea>
+      <h3>Reply to send</h3>
+      <textarea id="reply-edit">{e(editable)}</textarea>
       <div class="flex" style="margin-top:10px">
-        <button class="btn sm" onclick="leadAction({ld.id},'save_followup')">Save draft</button>
+        <button class="btn sm" onclick="sendReply({ld.id})">Approve &amp; Send</button>
+        <button class="btn sec sm" onclick="leadAction({ld.id},'save_reply')">Save draft</button>
         <button class="btn ok sm" onclick="leadAction({ld.id},'mark_reviewed')">Mark reviewed</button>
-        <button class="btn danger sm" onclick="leadAction({ld.id},'stop')">Stop lead</button>
-        <button class="btn sec sm" onclick="leadAction({ld.id},'mark_done')">Mark done</button>
-        <button class="btn danger sm" onclick="leadAction({ld.id},'delete')">Delete lead</button>
+        <button class="btn sec sm" onclick="leadAction({ld.id},'mark_done')">Done</button>
+        <button class="btn danger sm" onclick="leadAction({ld.id},'stop')">Stop</button>
+        <button class="btn danger sm" onclick="leadAction({ld.id},'delete')">Delete</button>
       </div>
+      <p class="muted small" id="send-status" style="margin-top:8px">Approve &amp; Send delivers this reply through {e(ld.platform)} from your connected account.</p>
     </div>
     """
 
@@ -938,22 +1030,14 @@ def lead_detail(lead_id: int, request: Request, _: str = Depends(require_login))
 async def lead_action(lead_id: int, request: Request, _: str = Depends(require_login)):
     form = await request.form()
     action = form.get("action", "")
-    followup = form.get("followup", "")
+    reply = form.get("reply", "")
 
     ld = db.get_lead(lead_id)
     if ld is None:
         return JSONResponse({"ok": False, "error": "not found"}, status_code=404)
 
-    if action == "save_followup":
-        try:
-            fups = json.loads(ld.followups) if ld.followups else []
-        except Exception:
-            fups = []
-        if fups:
-            fups[0] = followup
-        else:
-            fups = [followup]
-        db.update_lead_fields(lead_id, followups=fups)
+    if action == "save_reply":
+        db.update_lead_fields(lead_id, main_reply=reply)
     elif action == "mark_reviewed":
         db.update_lead_fields(lead_id, reviewed=True)
     elif action == "stop":
@@ -970,6 +1054,62 @@ async def lead_action(lead_id: int, request: Request, _: str = Depends(require_l
         db.delete_leads([lead_id])
 
     return JSONResponse({"ok": True})
+
+
+@router.post("/dashboard/leads/{lead_id}/send")
+async def send_reply(lead_id: int, request: Request, _: str = Depends(require_login)):
+    """Actually send the (edited) reply to the prospect via Bison/Instantly."""
+    import main  # lazy import to avoid circular import at module load
+
+    form = await request.form()
+    text = (form.get("reply", "") or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "empty reply"})
+
+    ld = db.get_lead(lead_id)
+    if ld is None:
+        return JSONResponse({"ok": False, "error": "lead not found"})
+
+    ws = db.get_workspace_config(ld.workspace_name)
+    if not ws or not ws.get("api_key"):
+        return JSONResponse({"ok": False, "error": "workspace API key missing"})
+
+    try:
+        meta = json.loads(ld.send_meta) if ld.send_meta else {}
+    except Exception:
+        meta = {}
+
+    try:
+        if ld.platform == "instantly":
+            uuid = main.get_latest_instantly_email_id(
+                meta.get("email") or ld.email, meta.get("campaign_id", ""), ws["api_key"])
+            if not uuid:
+                return JSONResponse({"ok": False, "error": "could not locate original email to thread"})
+            eaccount = meta.get("eaccount", "")
+            if not eaccount:
+                return JSONResponse({"ok": False, "error": "no sending account on file"})
+            main.send_instantly_reply(uuid, text, eaccount, meta.get("subject", "Re:"), ws["api_key"])
+            ok = True
+        else:  # bison
+            base = (ws.get("base_url") or db.get_setting("emailbison_base_url", "")).rstrip("/")
+            if not base:
+                return JSONResponse({"ok": False, "error": "no Bison base URL"})
+            res = main.send_reply_to_bison(
+                reply_id=meta.get("reply_id") or ld.reply_id,
+                message=main.format_email_for_bison(text),
+                sender_email_id=meta.get("sender_email_id"),
+                to_name=meta.get("to_name") or ld.name,
+                to_email=meta.get("to_email") or ld.email,
+                api_key=ws["api_key"],
+                base_url=base,
+            )
+            ok = bool(res)
+    except Exception as ex:
+        return JSONResponse({"ok": False, "error": str(ex)[:200]})
+
+    if ok:
+        db.update_lead_fields(lead_id, replied=True, reviewed=True, main_reply=text)
+    return JSONResponse({"ok": ok, "error": None if ok else "send failed at provider"})
 
 
 @router.post("/dashboard/bulk")
