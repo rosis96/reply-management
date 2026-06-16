@@ -493,9 +493,10 @@ EMAIL THREAD (oldest to newest):
 Write a follow-up sequence:
 - "main_reply": the FIRST follow-up to send NOW. Lightly reference the prior conversation, add a fresh
   reason to talk, and propose a next step. Short and human.
-- "followup_1" through "followup_8": the next eight follow-ups, each a DIFFERENT angle (new value,
+- "followup_1" through "followup_6": the next six follow-ups, each a DIFFERENT angle (new value,
   social proof, soft check-in, scheduling nudge, a relevant question, a light breakup near the end),
   escalating sensibly over a month. Each stands alone, short, ends with a clear next step.
+  Do NOT produce followup_7 or followup_8.
 
 RULES:
 - Continue the thread; never re-introduce the offer from scratch or repeat the first reply.
@@ -509,8 +510,8 @@ Return ONLY valid JSON:
   "confidence": 1,
   "human_review_needed": false,
   "main_reply": "",
-  "followup_1": "", "followup_2": "", "followup_3": "", "followup_4": "",
-  "followup_5": "", "followup_6": "", "followup_7": "", "followup_8": ""
+  "followup_1": "", "followup_2": "", "followup_3": "",
+  "followup_4": "", "followup_5": "", "followup_6": ""
 }}
 """
 
@@ -792,20 +793,35 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key, base_
         {"name": "reply_confidence", "value": str(ai_result.get("confidence", ""))},
     ]
 
-    payload = {
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": email,
-        "custom_variables": custom_vars,
-    }
+    # EmailBison rejects the WHOLE update if any custom variable doesn't exist
+    # on the account. So if it complains about a missing variable, drop that one
+    # and retry, instead of losing every variable.
+    for _ in range(4):
+        payload = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "custom_variables": custom_vars,
+        }
+        response = requests.put(url, headers=bison_headers(api_key), json=payload)
 
-    response = requests.put(url, headers=bison_headers(api_key), json=payload)
+        if response.status_code in [200, 201]:
+            return response.json()
 
-    if response.status_code not in [200, 201]:
-        log(f"Failed updating lead variables: {response.text}")
+        text = response.text or ""
+        missing = set(re.findall(r"custom variable named\s+([\w\-]+)", text))
+        remaining = [v for v in custom_vars if v.get("name") not in missing]
+        if missing and len(remaining) < len(custom_vars):
+            log(f"Lead variables: dropping unknown variable(s) {sorted(missing)} and retrying.")
+            custom_vars = remaining
+            if not custom_vars:
+                break
+            continue
+
+        log(f"Failed updating lead variables: {text}")
         return None
 
-    return response.json()
+    return None
 
 
 def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key, base_url):
