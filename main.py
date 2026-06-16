@@ -1531,10 +1531,18 @@ def resolve_instantly_workspace(payload):
 
 @app.post("/instantly-reply")
 async def instantly_reply_webhook(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
 
     log(f"Instantly webhook RECEIVED: {json.dumps(payload)[:2000]}")
-    workspace_name = resolve_instantly_workspace(payload)
+
+    # Explicit routing via the webhook URL (?workspace_name=...), so a follow-up
+    # workspace can be targeted even when it shares the Instantly account/key.
+    qp = request.query_params
+    workspace_name = (qp.get("workspace_name") or qp.get("ws")
+                      or resolve_instantly_workspace(payload))
     log(f"Instantly webhook routed to workspace: {workspace_name}")
 
     background_tasks.add_task(process_instantly_reply, payload, workspace_name)
