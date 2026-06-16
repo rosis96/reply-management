@@ -17,6 +17,7 @@ import os
 import json
 import secrets
 import html as _html
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -123,10 +124,45 @@ label { display:block; color:var(--muted); font-size:12px; margin:14px 0 5px; fo
 .fup .step { font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
 .kv { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
 .kv .tag { background:var(--muted-soft); color:var(--muted); border-radius:8px; padding:3px 9px; font-size:12px; }
+/* workspace switcher */
+.ws-switch { position:relative; margin-left:auto; }
+.ws-btn { background:#fff; border:1px solid var(--line); border-radius:9px; padding:7px 13px;
+          font-weight:700; font-size:13px; cursor:pointer; color:var(--txt); }
+.ws-btn:hover { border-color:var(--accent); }
+.ws-menu { position:absolute; top:118%; right:0; width:268px; background:#fff; border:1px solid var(--line);
+           border-radius:12px; box-shadow:0 10px 28px rgba(20,30,60,.14); padding:8px; display:none; z-index:60; }
+.ws-menu.open { display:block; }
+.ws-search { width:100%; margin-bottom:6px; }
+.ws-list { max-height:280px; overflow:auto; display:flex; flex-direction:column; }
+.ws-item { padding:8px 10px; border-radius:8px; color:var(--txt); font-size:14px; display:block; }
+.ws-item:hover { background:var(--accent-soft); }
+.ws-item.sel { background:var(--accent-soft); font-weight:700; }
 """
 
 
-def layout(title, active, body):
+def _workspace_switcher(current_ws):
+    try:
+        workspaces = db.list_workspaces()
+    except Exception:
+        workspaces = []
+
+    label = current_ws or "All workspaces"
+    all_sel = "sel" if not current_ws else ""
+    items = f'<a class="ws-item {all_sel}" href="/dashboard/switch?workspace=">All workspaces</a>'
+    for w in workspaces:
+        sel = "sel" if w.name == current_ws else ""
+        items += f'<a class="ws-item {sel}" href="/dashboard/switch?workspace={quote(w.name)}">{e(w.name)}</a>'
+
+    return f"""<div class="ws-switch">
+      <button class="ws-btn" type="button" onclick="var m=document.getElementById('wsmenu');m.classList.toggle('open');event.stopPropagation();">{e(label)} &#9662;</button>
+      <div class="ws-menu" id="wsmenu" onclick="event.stopPropagation();">
+        <input class="ws-search" placeholder="Search workspaces..." oninput="wsFilter(this.value)">
+        <div class="ws-list">{items}</div>
+      </div>
+    </div>"""
+
+
+def layout(title, active, body, current_ws=""):
     def navlink(href, label, key):
         cls = "active" if key == active else ""
         return f'<a class="{cls}" href="{href}">{label}</a>'
@@ -139,8 +175,14 @@ def layout(title, active, body):
   {navlink("/dashboard", "Leads", "leads")}
   {navlink("/dashboard/workspaces", "Workspaces", "workspaces")}
   {navlink("/dashboard/settings", "Settings", "settings")}
+  {_workspace_switcher(current_ws)}
 </div>
-<div class="wrap">{body}</div></body></html>"""
+<div class="wrap">{body}</div>
+<script>
+function wsFilter(q){{q=q.toLowerCase();document.querySelectorAll('.ws-item').forEach(function(el){{el.style.display=el.textContent.toLowerCase().indexOf(q)>-1?'block':'none';}});}}
+document.addEventListener('click',function(){{var m=document.getElementById('wsmenu');if(m)m.classList.remove('open');}});
+</script>
+</body></html>"""
 
 
 def yesno(flag, yes="Yes", no="No"):
@@ -173,8 +215,22 @@ def reply_cell(ld):
 # Leads list
 # -------------------------
 
+@router.get("/dashboard/switch")
+def switch_workspace(workspace: str = "", _: str = Depends(require_login)):
+    target = "/dashboard" + (f"?workspace={quote(workspace)}" if workspace else "")
+    resp = RedirectResponse(target, status_code=303)
+    if workspace:
+        resp.set_cookie("ws", workspace, max_age=60 * 60 * 24 * 365, samesite="lax")
+    else:
+        resp.delete_cookie("ws")
+    return resp
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
-def leads_page(workspace: str = "", status: str = "", _: str = Depends(require_login)):
+def leads_page(request: Request, workspace: str = "", status: str = "", _: str = Depends(require_login)):
+    if not workspace:
+        workspace = request.cookies.get("ws", "")
+
     counts = db.lead_counts()
     leads = db.list_leads(workspace=workspace or None, status=status or None)
     workspaces = db.list_workspaces()
@@ -230,7 +286,7 @@ def leads_page(workspace: str = "", status: str = "", _: str = Depends(require_l
       <tbody>{rows}</tbody>
     </table>
     """
-    return HTMLResponse(layout("Leads", "leads", body))
+    return HTMLResponse(layout("Leads", "leads", body, current_ws=workspace))
 
 
 # -------------------------
@@ -238,7 +294,7 @@ def leads_page(workspace: str = "", status: str = "", _: str = Depends(require_l
 # -------------------------
 
 @router.get("/dashboard/leads/{lead_id}", response_class=HTMLResponse)
-def lead_detail(lead_id: int, _: str = Depends(require_login)):
+def lead_detail(lead_id: int, request: Request, _: str = Depends(require_login)):
     ld = db.get_lead(lead_id)
     if ld is None:
         raise HTTPException(status_code=404, detail="Lead not found")
@@ -314,7 +370,7 @@ def lead_detail(lead_id: int, _: str = Depends(require_login)):
       {fup_html}
     </div>
     """
-    return HTMLResponse(layout(ld.name or "Lead", "leads", body))
+    return HTMLResponse(layout(ld.name or "Lead", "leads", body, current_ws=request.cookies.get("ws", "")))
 
 
 # -------------------------
@@ -322,7 +378,7 @@ def lead_detail(lead_id: int, _: str = Depends(require_login)):
 # -------------------------
 
 @router.get("/dashboard/workspaces", response_class=HTMLResponse)
-def workspaces_page(_: str = Depends(require_login)):
+def workspaces_page(request: Request, _: str = Depends(require_login)):
     workspaces = db.list_workspaces()
     rows = ""
     if not workspaces:
@@ -347,7 +403,7 @@ def workspaces_page(_: str = Depends(require_login)):
       <tbody>{rows}</tbody>
     </table>
     """
-    return HTMLResponse(layout("Workspaces", "workspaces", body))
+    return HTMLResponse(layout("Workspaces", "workspaces", body, current_ws=request.cookies.get("ws", "")))
 
 
 def _workspace_form(ws=None, error=""):
@@ -501,7 +557,7 @@ def workspace_delete(ws_id: int, _: str = Depends(require_login)):
 # -------------------------
 
 @router.get("/dashboard/settings", response_class=HTMLResponse)
-def settings_page(saved: str = "", _: str = Depends(require_login)):
+def settings_page(request: Request, saved: str = "", _: str = Depends(require_login)):
     s = db.all_settings()
     saved_html = '<div class="card" style="border-color:var(--ok);color:var(--ok)">Saved.</div>' if saved else ""
     body = f"""
@@ -524,7 +580,7 @@ def settings_page(saved: str = "", _: str = Depends(require_login)):
       The dashboard password is set with the <b>DASHBOARD_PASSWORD</b> environment variable on Railway (not here, for security).
     </p>
     """
-    return HTMLResponse(layout("Settings", "settings", body))
+    return HTMLResponse(layout("Settings", "settings", body, current_ws=request.cookies.get("ws", "")))
 
 
 @router.post("/dashboard/settings")
