@@ -60,6 +60,7 @@ def get_human_review_webhook():
 # is left for a human to answer manually, but the lead is STILL enriched with
 # follow-up variables and pushed into the follow-up campaign.
 AUTO_SEND_INTENTS = {
+    "simple_positive",
     "positive_interest",
     "positive_share_more",
     "positive_share_more_info",
@@ -80,6 +81,19 @@ STOP_INTENTS = {
 }
 
 
+# Keyword signals (matched as substrings, so the exact intent name the model
+# picks doesn't have to match perfectly).
+STOP_KEYWORDS = [
+    "unsubscribe", "not_interested", "not interested", "negative",
+    "out_of_office", "out of office", "ooo", "automated", "auto_reply",
+    "wrong_person", "wrong person",
+]
+SEND_KEYWORDS = [
+    "simple_positive", "positive", "interested", "yes_", "share_more",
+    "share more", "meeting_ready", "ready_to_talk",
+]
+
+
 def decide_reply_action(ai_result):
     """Return one of: 'send', 'skip_enrich', 'stop'.
 
@@ -89,16 +103,27 @@ def decide_reply_action(ai_result):
     """
     intent = str(ai_result.get("intent", "")).strip().lower()
 
+    # 1) Hard stops first (opt-out / junk). Checked before anything else so
+    #    "not_interested" never gets read as "interested".
     if intent in STOP_INTENTS:
         return "stop"
+    for kw in STOP_KEYWORDS:
+        if kw in intent:
+            return "stop"
 
     # Out-of-office / automated / wrong-person are flagged by the model here.
     if ai_result.get("human_review_needed") is True:
         return "stop"
 
+    # 2) Simple positives -> auto-send.
     if intent in AUTO_SEND_INTENTS:
         return "send"
+    for kw in SEND_KEYWORDS:
+        if kw in intent:
+            return "send"
 
+    # 3) Everything else (pricing, case studies, proof, off-topic, objections)
+    #    -> a human handles the reply, but still enrich + push to follow-up.
     return "skip_enrich"
 
 
