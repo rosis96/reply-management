@@ -609,6 +609,21 @@ def update_lead_fields(lead_id, **fields):
         session.close()
 
 
+def delete_leads(ids):
+    session = SessionLocal()
+    try:
+        count = 0
+        for lead_id in ids:
+            lead = session.get(Lead, int(lead_id))
+            if lead is not None:
+                session.delete(lead)
+                count += 1
+        session.commit()
+        return count
+    finally:
+        session.close()
+
+
 def bulk_update_leads(ids, **fields):
     session = SessionLocal()
     try:

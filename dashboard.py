@@ -80,7 +80,24 @@ def reply_badge(ld):
 
 
 def fup_badge(ld):
-    return pill("Added", "blue") if ld.fup_added else pill("No", "muted")
+    return pill("Added", "violet") if ld.fup_added else pill("No", "muted")
+
+
+# Inline lucide icons (MIT) for the icon-only sidebar.
+_SVG = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round">{}</svg>')
+ICONS = {
+    "dashboard": '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+    "booked": '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>',
+    "inbox": '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    "support": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="9.17" y1="14.83" x2="4.93" y2="19.07"/>',
+    "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+}
+
+
+def icon(name):
+    return _SVG.format(ICONS.get(name, ""))
 
 
 def review_badge(ld):
@@ -225,15 +242,81 @@ label { display:block; color:var(--muted); font-size:12px; margin:13px 0 5px; fo
 .flex { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .right { margin-left:auto; }
 @media (max-width:900px){ .cards{grid-template-columns:repeat(2,1fr);} .sidebar{display:none;} }
+
+/* ============ PREMIUM OVERRIDES ============ */
+:root {
+  --bg:#f8fafc; --panel:#ffffff; --line:#e5e7eb; --txt:#0f172a; --muted:#64748b;
+  --muted-soft:#f1f5f9; --accent:#2563eb; --accent-soft:#eff6ff;
+  --ok:#166534; --ok-soft:#ecfdf5; --blue:#1d4ed8; --blue-soft:#eff6ff;
+  --violet:#6d28d9; --violet-soft:#f5f3ff; --warn:#b45309; --warn-soft:#fff7ed;
+  --no:#b91c1c; --no-soft:#fef2f2; --sidebar:#0f172a;
+}
+body { font-family:'Inter',-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       font-size:13px; -webkit-font-smoothing:antialiased; }
+
+/* icon sidebar */
+.sidebar { width:64px; flex:0 0 64px; background:var(--sidebar); color:#cbd5e1;
+           padding:14px 0; align-items:center; }
+.sidebar .logo { font-size:20px; color:#fff; padding:0 0 16px; margin:0; }
+.sidebar .navi { width:100%; align-items:center; gap:6px; }
+.sidebar .navi a { width:42px; height:42px; padding:0; justify-content:center; border-radius:11px;
+                   color:#cbd5e1; position:relative; }
+.sidebar .navi a:hover { background:rgba(255,255,255,.06); color:#fff; }
+.sidebar .navi a.active { background:rgba(255,255,255,.10); color:#fff; }
+.sidebar .navi a svg { width:20px; height:20px; }
+.tip { position:absolute; left:52px; top:50%; transform:translateY(-50%); background:#0f172a;
+       color:#fff; font-size:12px; line-height:1.3; padding:6px 9px; border-radius:8px; white-space:nowrap;
+       opacity:0; pointer-events:none; transition:opacity .12s; box-shadow:0 6px 18px rgba(0,0,0,.28); z-index:200; }
+.sidebar .navi a:hover .tip, .mewrap:hover .tip { opacity:1; }
+.tip b { display:block; } .tip span { color:#94a3b8; font-size:11px; }
+.mewrap { margin-top:auto; position:relative; display:flex; justify-content:center; padding-top:10px; }
+.ava-dot { width:32px; height:32px; border-radius:50%; background:var(--accent); color:#fff;
+           display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; cursor:default; }
+.sidebar .logoutlink { color:#94a3b8; width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:11px; }
+.sidebar .logoutlink:hover { background:rgba(255,255,255,.06); color:#fff; }
+
+/* top bar */
+.topbar { height:56px; padding:0 22px; gap:22px; }
+.topbar .tabs { gap:20px; height:100%; align-items:stretch; }
+.topbar .tabs a { display:flex; align-items:center; font-size:14px; font-weight:600; color:var(--muted);
+                  border-bottom:2px solid transparent; }
+.topbar .tabs a.active { color:var(--txt); border-bottom:2px solid var(--accent); }
+.ws-btn { height:36px; font-size:13px; }
+
+/* content */
+.content { padding:24px 26px 64px; }
+h1 { font-size:19px; }
+.cards { gap:12px; }
+.stat { height:84px; display:flex; flex-direction:column; justify-content:center; border-radius:14px;
+        box-shadow:0 1px 2px rgba(15,23,42,.04); }
+.stat .n { font-size:32px; font-weight:700; line-height:1; }
+.stat .l { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.04em; margin-top:6px; }
+
+/* filters */
+.filterbar { padding:10px 12px; gap:8px; border-radius:12px; }
+.filterbar input, .filterbar select { height:36px; font-size:13px; border:1px solid var(--line); }
+
+/* table density */
+thead th { font-size:11px; letter-spacing:.04em; text-transform:uppercase; padding:10px 14px; background:#fff; }
+tbody td { height:56px; font-size:13px; }
+.tablewrap { border-radius:14px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+
+/* softer pills */
+.pill { padding:4px 10px; font-weight:600; }
+.pill.violet { background:var(--violet-soft); color:var(--violet); }
+
+/* buttons */
+.btn { border-radius:9px; }
+.btn.ok { background:var(--ok-soft); color:var(--ok); }
 """
 
+# (icon_key, tooltip, href, active_key)
 SIDEBAR_ITEMS = [
-    ("Dashboard", "/dashboard", "reply"),
-    ("Leads", "/dashboard", "leads"),
-    ("Meeting Booked", "/dashboard?stage=booked", "booked"),
-    ("Master Inbox", "/dashboard/soon?name=Master+Inbox", "soon"),
-    ("Settings", "/dashboard/settings", "settings"),
-    ("Help & Support", "/dashboard/soon?name=Help+%26+Support", "soon"),
+    ("dashboard", "Leads", "/dashboard", "reply"),
+    ("booked", "Meetings", "/dashboard?stage=booked", "booked"),
+    ("inbox", "Inbox", "/dashboard/soon?name=Master+Inbox", "inbox"),
+    ("settings", "Settings", "/dashboard/settings", "settings"),
+    ("support", "Support", "/dashboard/soon?name=Help+%26+Support", "support"),
 ]
 
 STAGE_DEFS = [
@@ -280,7 +363,8 @@ function leadAction(id, action){
   fd.append('action', action);
   if(ta) fd.append('followup', ta.value);
   if(ss) fd.append('stage', ss.value);
-  var reloaders = ['stop','mark_done','set_stage','mark_booked'];
+  if(action==='delete' && !confirm('Delete this lead? This cannot be undone.')) return;
+  var reloaders = ['stop','mark_done','set_stage','mark_booked','delete'];
   return fetch('/dashboard/leads/'+id+'/action', {method:'POST', body:fd})
     .then(function(r){return r.json();})
     .then(function(d){ if(d && d.ok){ if(reloaders.indexOf(action)>-1){ location.reload(); } else { openDrawer(id); } } });
@@ -304,6 +388,7 @@ function toggleAll(c){ document.querySelectorAll('.rowchk').forEach(function(x){
 function bulkDo(action){
   var ids=rowChecked(); if(!ids.length) return;
   if(action==='export'){ window.location='/dashboard/export?ids='+ids.join(','); return; }
+  if(action==='delete' && !confirm('Delete '+ids.length+' lead(s)? This cannot be undone.')) return;
   var fd=new FormData(); fd.append('action',action); ids.forEach(function(i){fd.append('ids',i);});
   fetch('/dashboard/bulk',{method:'POST',body:fd}).then(function(){location.reload();});
 }
@@ -335,9 +420,10 @@ def layout(title, active, body, current_ws="", with_drawer=False):
     initials = (user[:2] or "AD").upper()
 
     side = ""
-    for label, href, key in SIDEBAR_ITEMS:
+    for icon_key, tip, href, key in SIDEBAR_ITEMS:
         cls = "active" if key == active else ""
-        side += f'<a class="{cls}" href="{href}">{e(label)}</a>'
+        side += (f'<a class="{cls}" href="{href}">{icon(icon_key)}'
+                 f'<span class="tip">{e(tip)}</span></a>')
 
     tabs = ""
     for label, href, key in [("Reply Manager", "/dashboard", "reply"),
@@ -361,16 +447,18 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>{e(title)}</title><style>{PAGE_CSS}</style></head><body>
 <div class="app">
   <div class="sidebar">
-    <div class="logo">⚡ Reply Manager</div>
+    <div class="logo">⚡</div>
     <div class="navi">{side}</div>
-    <div class="spacer"></div>
-    <a href="/dashboard/logout" style="color:#aab2cd;padding:9px 12px;font-size:13px;font-weight:600">Logout</a>
-    <div class="me">
-      <div class="ava">{e(initials)}</div>
-      <div><div class="nm">{e(user)}</div><div class="ws">{e(current_ws or "All workspaces")}</div></div>
+    <a class="logoutlink" href="/dashboard/logout">{icon("logout")}<span class="tip">Logout</span></a>
+    <div class="mewrap">
+      <div class="ava-dot">{e(initials)}</div>
+      <span class="tip"><b>{e(user)}</b><span>{e(current_ws or "All workspaces")}</span></span>
     </div>
   </div>
   <div class="main">
@@ -536,6 +624,7 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
       <button class="btn sec sm" onclick="bulkDo('mark_reviewed')">Mark reviewed</button>
       <button class="btn danger sm" onclick="bulkDo('stop')">Stop selected</button>
       <button class="btn sec sm" onclick="bulkDo('export')">Export CSV</button>
+      <button class="btn danger sm" onclick="bulkDo('delete')">Delete</button>
     </div>
 
     <div class="tablewrap">
@@ -690,6 +779,7 @@ def build_panel(ld):
         <button class="btn ok sm" onclick="leadAction({ld.id},'mark_reviewed')">Mark reviewed</button>
         <button class="btn danger sm" onclick="leadAction({ld.id},'stop')">Stop lead</button>
         <button class="btn sec sm" onclick="leadAction({ld.id},'mark_done')">Mark done</button>
+        <button class="btn danger sm" onclick="leadAction({ld.id},'delete')">Delete lead</button>
       </div>
     </div>
     """
@@ -744,6 +834,8 @@ async def lead_action(lead_id: int, request: Request, _: str = Depends(require_l
         st = form.get("stage", "")
         if st:
             db.update_lead_fields(lead_id, stage=st)
+    elif action == "delete":
+        db.delete_leads([lead_id])
 
     return JSONResponse({"ok": True})
 
@@ -760,6 +852,8 @@ async def bulk(request: Request, _: str = Depends(require_login)):
             db.bulk_update_leads(ids, action="stop", stage="stopped", reviewed=True)
         elif action == "mark_booked":
             db.bulk_update_leads(ids, stage="booked", reviewed=True)
+        elif action == "delete":
+            db.delete_leads(ids)
     return RedirectResponse("/dashboard", status_code=303)
 
 
