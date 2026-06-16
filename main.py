@@ -21,6 +21,7 @@ app = FastAPI()
 @app.on_event("startup")
 def _startup():
     db.init_db()
+    db.migrate()
     db.seed_if_empty()
     if db.IS_SQLITE:
         log("DB backend: SQLITE (ephemeral). On Railway this means DATABASE_URL is NOT connected -- data WILL reset on every redeploy. Connect Postgres!")
@@ -129,12 +130,17 @@ def decide_reply_action(ai_result):
 
 def record_lead(platform, workspace_name, external_lead_id, reply_id,
                 ai_result, action, replied, fup_added,
-                latest_reply=None, name="", email=""):
+                latest_reply=None, name="", email="",
+                reply_text="", subject="", campaign="", thread=None):
     """Write/update the lead row that powers the dashboard. Never raises."""
     try:
         if latest_reply:
             name = name or latest_reply.get("from_name", "") or ""
             email = email or latest_reply.get("from_email_address", "") or ""
+            reply_text = reply_text or latest_reply.get("body", "") or latest_reply.get("text_body", "") or ""
+            subject = subject or latest_reply.get("subject", "") or ""
+
+        followups = [ai_result.get(f"followup_{i}", "") for i in range(1, 7)]
 
         db.upsert_lead(
             platform=platform,
@@ -151,6 +157,11 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
             replied=replied,
             fup_added=fup_added,
             main_reply=ai_result.get("main_reply", ""),
+            reply_text=reply_text,
+            subject=subject,
+            campaign=campaign,
+            followups=followups,
+            thread=thread or [],
         )
     except Exception as ex:
         log(f"Failed to record lead in dashboard DB: {ex}")
@@ -825,6 +836,7 @@ def process_reply(lead_id, workspace_name):
             action=action,
             replied=False,
             fup_added=False,
+            thread=thread,
         )
         return
 
@@ -876,6 +888,7 @@ def process_reply(lead_id, workspace_name):
         action=action,
         replied=bool(send_result),
         fup_added=bool(update_result),
+        thread=thread,
     )
 
     final_log = {
@@ -1169,6 +1182,10 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
             fup_added=False,
             name=first_name,
             email=email,
+            reply_text=reply_text,
+            subject=subject,
+            campaign=payload.get("campaign_name", ""),
+            thread=thread,
         )
         return
 
@@ -1219,6 +1236,10 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         fup_added=bool(update_result),
         name=first_name,
         email=email,
+        reply_text=reply_text,
+        subject=subject,
+        campaign=payload.get("campaign_name", ""),
+        thread=thread,
     )
 
     final_log = {

@@ -2,11 +2,11 @@
 """
 Password-protected web dashboard for the reply management system.
 
-Two parts:
-  - Leads table: every processed reply with Reply / FUP status.
+Parts:
+  - Leads table: every processed reply with Reply / FUP status (Bison-style).
+  - Lead detail (unibox): the thread + each AI-drafted follow-up step.
   - Control panel: workspaces (API keys, base URLs, campaign IDs, client
-    profiles, reply formats) and global settings (OpenAI key, review webhook,
-    reply delay) — all editable in the browser, no file editing needed.
+    profiles, reply formats) and global settings.
 
 Login: HTTP Basic auth.
   username = env DASHBOARD_USER     (default "admin")
@@ -18,7 +18,7 @@ import json
 import secrets
 import html as _html
 
-from fastapi import APIRouter, Depends, Request, Form, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
@@ -56,52 +56,73 @@ def e(value):
     return _html.escape("" if value is None else str(value))
 
 
+def nl2br(value):
+    return e(value).replace("\n", "<br>")
+
+
 PAGE_CSS = """
-:root { --bg:#0f1220; --card:#191d2e; --line:#2a3050; --txt:#e7e9f3;
-        --muted:#9aa3c7; --accent:#6c8cff; --ok:#34d399; --no:#f87171; --warn:#fbbf24; }
+:root { --bg:#f5f7fb; --card:#ffffff; --line:#e4e8f0; --txt:#1c2230;
+        --muted:#6b7385; --accent:#4f6bff; --accent-soft:#eef1ff;
+        --ok:#15a36e; --ok-soft:#e6f6ee; --no:#d9434f; --no-soft:#fcebec;
+        --warn:#b9770a; --warn-soft:#fdf3e2; --muted-soft:#eef0f5; }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--txt);
        font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
 a { color:var(--accent); text-decoration:none; }
-.nav { display:flex; gap:18px; align-items:center; padding:14px 22px;
+.nav { display:flex; gap:20px; align-items:center; padding:14px 24px;
        background:var(--card); border-bottom:1px solid var(--line); }
-.nav .brand { font-weight:700; margin-right:10px; }
-.nav a { color:var(--muted); font-weight:600; }
+.nav .brand { font-weight:800; margin-right:8px; letter-spacing:-.01em; }
+.nav a { color:var(--muted); font-weight:600; font-size:14px; }
 .nav a.active { color:var(--txt); }
-.wrap { max-width:1180px; margin:0 auto; padding:24px 22px 60px; }
-h1 { font-size:20px; margin:0 0 16px; }
-h2 { font-size:16px; margin:26px 0 10px; }
-.cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:20px; }
-.stat { background:var(--card); border:1px solid var(--line); border-radius:12px;
-        padding:14px 18px; min-width:130px; }
-.stat .n { font-size:24px; font-weight:700; }
-.stat .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+.wrap { max-width:1180px; margin:0 auto; padding:26px 24px 70px; }
+h1 { font-size:21px; margin:0 0 18px; letter-spacing:-.01em; }
+h2 { font-size:15px; margin:24px 0 10px; }
+.cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:22px; }
+.stat { background:var(--card); border:1px solid var(--line); border-radius:14px;
+        padding:14px 18px; min-width:128px; box-shadow:0 1px 2px rgba(20,30,60,.04); }
+.stat .n { font-size:25px; font-weight:800; }
+.stat .l { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
 table { width:100%; border-collapse:collapse; background:var(--card);
-        border:1px solid var(--line); border-radius:12px; overflow:hidden; font-size:13px; }
-th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
-th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+        border:1px solid var(--line); border-radius:14px; overflow:hidden;
+        font-size:13px; box-shadow:0 1px 2px rgba(20,30,60,.04); }
+th,td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; background:#fafbfe; }
 tr:last-child td { border-bottom:none; }
-.pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
-.pill.ok { background:rgba(52,211,153,.15); color:var(--ok); }
-.pill.no { background:rgba(248,113,113,.15); color:var(--no); }
-.pill.warn { background:rgba(251,191,36,.15); color:var(--warn); }
-.pill.muted { background:rgba(154,163,199,.15); color:var(--muted); }
-.filters { margin-bottom:14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+tbody tr:hover { background:#fafbff; }
+.pill { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; }
+.pill.ok { background:var(--ok-soft); color:var(--ok); }
+.pill.no { background:var(--no-soft); color:var(--no); }
+.pill.warn { background:var(--warn-soft); color:var(--warn); }
+.pill.muted { background:var(--muted-soft); color:var(--muted); }
+.filters { margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 select,input[type=text],input[type=password],textarea {
-        background:#11152a; color:var(--txt); border:1px solid var(--line);
-        border-radius:8px; padding:9px 11px; font-size:13px; width:100%; }
-textarea { min-height:150px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+        background:#fff; color:var(--txt); border:1px solid var(--line);
+        border-radius:9px; padding:9px 11px; font-size:13px; width:100%; }
+select:focus,input:focus,textarea:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
+textarea { min-height:150px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; line-height:1.5; }
 label { display:block; color:var(--muted); font-size:12px; margin:14px 0 5px; font-weight:600; }
 .row2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .btn { display:inline-block; background:var(--accent); color:#fff; border:none;
-       border-radius:8px; padding:10px 16px; font-weight:700; font-size:13px; cursor:pointer; }
-.btn.sec { background:#2a3050; }
-.btn.danger { background:#3a1d2a; color:var(--no); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+       border-radius:9px; padding:10px 16px; font-weight:700; font-size:13px; cursor:pointer; }
+.btn:hover { filter:brightness(1.05); }
+.btn.sec { background:#fff; color:var(--txt); border:1px solid var(--line); }
+.btn.danger { background:var(--no-soft); color:var(--no); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+        padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 2px rgba(20,30,60,.04); }
 .muted { color:var(--muted); }
 .small { font-size:12px; }
 .flex { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 .right { margin-left:auto; }
+.viewlink { font-weight:700; }
+/* unibox / thread */
+.msg { border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; background:#fff; }
+.msg.in { background:#fbfcff; }
+.msg .who { font-size:12px; color:var(--muted); margin-bottom:7px; font-weight:600; }
+.msg .body { font-size:14px; line-height:1.6; white-space:normal; }
+.fup { border:1px dashed var(--line); border-radius:12px; padding:13px 16px; margin-bottom:10px; background:#fafbfe; }
+.fup .step { font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+.kv { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.kv .tag { background:var(--muted-soft); color:var(--muted); border-radius:8px; padding:3px 9px; font-size:12px; }
 """
 
 
@@ -128,12 +149,32 @@ def yesno(flag, yes="Yes", no="No"):
     return f'<span class="pill no">{no}</span>'
 
 
+def action_pill(action):
+    if action == "send":
+        return '<span class="pill ok">send</span>'
+    if action == "skip_enrich":
+        return '<span class="pill warn">enrich</span>'
+    if action == "stop":
+        return '<span class="pill muted">stop</span>'
+    if action == "error":
+        return '<span class="pill no">error</span>'
+    return f'<span class="muted">{e(action)}</span>'
+
+
+def reply_cell(ld):
+    if ld.replied:
+        return '<span class="pill ok">Replied</span>'
+    if ld.reply_added:
+        return '<span class="pill warn">Added, not sent</span>'
+    return '<span class="pill no">Not sent</span>'
+
+
 # -------------------------
-# Leads
+# Leads list
 # -------------------------
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def leads_page(request: Request, workspace: str = "", status: str = "", _: str = Depends(require_login)):
+def leads_page(workspace: str = "", status: str = "", _: str = Depends(require_login)):
     counts = db.lead_counts()
     leads = db.list_leads(workspace=workspace or None, status=status or None)
     workspaces = db.list_workspaces()
@@ -151,24 +192,10 @@ def leads_page(request: Request, workspace: str = "", status: str = "", _: str =
 
     rows = ""
     if not leads:
-        rows = '<tr><td colspan="9" class="muted">No leads yet. They appear here as replies are processed.</td></tr>'
+        rows = '<tr><td colspan="10" class="muted">No leads yet. They appear here as replies are processed.</td></tr>'
     for ld in leads:
         when = ld.created_at.strftime("%b %d, %H:%M") if ld.created_at else ""
         intent = e(ld.intent) or '<span class="muted">-</span>'
-
-        if ld.action == "send":
-            action_pill = '<span class="pill ok">send</span>'
-        elif ld.action == "skip_enrich":
-            action_pill = '<span class="pill warn">enrich</span>'
-        elif ld.action == "stop":
-            action_pill = '<span class="pill muted">stop</span>'
-        else:
-            action_pill = f'<span class="muted">{e(ld.action)}</span>'
-
-        reply_cell = yesno(ld.replied, "Replied", "Not sent")
-        if ld.reply_added and not ld.replied:
-            reply_cell = '<span class="pill warn">Added, not sent</span>'
-
         rows += f"""<tr>
           <td class="small muted">{e(when)}</td>
           <td>{e(ld.workspace_name)}</td>
@@ -176,9 +203,10 @@ def leads_page(request: Request, workspace: str = "", status: str = "", _: str =
           <td class="small">{e(ld.email)}</td>
           <td>{intent}</td>
           <td>{e(ld.confidence)}</td>
-          <td>{action_pill}</td>
-          <td>{reply_cell}</td>
+          <td>{action_pill(ld.action)}</td>
+          <td>{reply_cell(ld)}</td>
           <td>{yesno(ld.fup_added, "Added", "No")}</td>
+          <td><a class="viewlink" href="/dashboard/leads/{ld.id}">View &rarr;</a></td>
         </tr>"""
 
     body = f"""
@@ -197,12 +225,96 @@ def leads_page(request: Request, workspace: str = "", status: str = "", _: str =
     <table>
       <thead><tr>
         <th>When</th><th>Workspace</th><th>Name</th><th>Email</th>
-        <th>Intent</th><th>Conf</th><th>Action</th><th>Reply</th><th>FUP</th>
+        <th>Intent</th><th>Conf</th><th>Action</th><th>Reply</th><th>FUP</th><th></th>
       </tr></thead>
       <tbody>{rows}</tbody>
     </table>
     """
     return HTMLResponse(layout("Leads", "leads", body))
+
+
+# -------------------------
+# Lead detail (unibox)
+# -------------------------
+
+@router.get("/dashboard/leads/{lead_id}", response_class=HTMLResponse)
+def lead_detail(lead_id: int, _: str = Depends(require_login)):
+    ld = db.get_lead(lead_id)
+    if ld is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        followups = json.loads(ld.followups) if ld.followups else []
+    except Exception:
+        followups = []
+    try:
+        thread = json.loads(ld.thread) if ld.thread else []
+    except Exception:
+        thread = []
+
+    # --- conversation preview ---
+    convo = ""
+    if ld.reply_text:
+        convo += f"""<div class="msg in">
+            <div class="who">Prospect &mdash; {e(ld.name)} &lt;{e(ld.email)}&gt;</div>
+            <div class="body">{nl2br(ld.reply_text)}</div></div>"""
+    if ld.main_reply:
+        sent_label = "Sent reply" if ld.replied else "Drafted reply (not sent — for you to send manually)"
+        convo += f"""<div class="msg">
+            <div class="who">{e(sent_label)}</div>
+            <div class="body">{nl2br(ld.main_reply)}</div></div>"""
+    if not convo and thread:
+        for m in thread:
+            who = m.get("type", "message")
+            body = m.get("body", "") or m.get("text_body", "")
+            convo += f"""<div class="msg"><div class="who">{e(who)}</div>
+                <div class="body">{nl2br(body)}</div></div>"""
+    if not convo:
+        convo = '<p class="muted">No conversation text was captured for this lead.</p>'
+
+    # --- follow-up sequence ---
+    fup_html = ""
+    real_fups = [(i + 1, f) for i, f in enumerate(followups) if (f or "").strip()]
+    if real_fups:
+        for step, text_ in real_fups:
+            fup_html += f"""<div class="fup">
+                <div class="step">Follow-up {step}</div>
+                <div class="body">{nl2br(text_)}</div></div>"""
+    else:
+        fup_html = '<p class="muted">No follow-up drafts were generated for this lead.</p>'
+
+    when = ld.created_at.strftime("%b %d, %Y %H:%M") if ld.created_at else ""
+
+    body = f"""
+    <a href="/dashboard" class="muted small">&larr; Back to leads</a>
+    <h1>{e(ld.name) or e(ld.email) or 'Lead'}</h1>
+    <div class="kv">
+      <span class="tag">{e(ld.email)}</span>
+      <span class="tag">{e(ld.workspace_name)}</span>
+      <span class="tag">{e(ld.platform)}</span>
+      {f'<span class="tag">{e(ld.campaign)}</span>' if ld.campaign else ''}
+      <span class="tag">{e(when)}</span>
+    </div>
+    <div class="flex" style="margin-bottom:18px">
+      <span>Intent: <b>{e(ld.intent) or '-'}</b></span>
+      <span class="muted">conf {e(ld.confidence)}</span>
+      {action_pill(ld.action)}
+      {reply_cell(ld)}
+      <span>FUP: {yesno(ld.fup_added, "Added", "No")}</span>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Conversation</h2>
+      {convo}
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Follow-up sequence (AI-drafted)</h2>
+      <p class="muted small" style="margin-top:0">These are loaded into the platform as follow-up variables and sent on schedule.</p>
+      {fup_html}
+    </div>
+    """
+    return HTMLResponse(layout(ld.name or "Lead", "leads", body))
 
 
 # -------------------------
@@ -294,13 +406,13 @@ def _workspace_form(ws=None, error=""):
       </div>
 
       <div class="card">
-        <h2>Client profile (JSON)</h2>
+        <h2 style="margin-top:0">Client profile (JSON)</h2>
         <p class="muted small">Positioning, offer, target customers, tone.</p>
         <textarea name="client_profile">{e(profile)}</textarea>
       </div>
 
       <div class="card">
-        <h2>Reply format (JSON)</h2>
+        <h2 style="margin-top:0">Reply format (JSON)</h2>
         <p class="muted small">Intents, word counts, CTA style, scheduling language.</p>
         <textarea name="reply_format">{e(rformat)}</textarea>
       </div>

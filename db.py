@@ -18,6 +18,8 @@ from datetime import datetime
 
 from sqlalchemy import (
     create_engine,
+    inspect,
+    text,
     Column,
     Integer,
     String,
@@ -116,7 +118,12 @@ class Lead(Base):
     replied = Column(Boolean, default=False)               # reply was actually sent
     fup_added = Column(Boolean, default=False)             # follow-up variables written
 
-    main_reply = Column(Text, default="")
+    campaign = Column(String(255), default="")
+    subject = Column(String(512), default="")
+    reply_text = Column(Text, default="")                  # the prospect's incoming reply
+    main_reply = Column(Text, default="")                  # our AI reply
+    followups = Column(Text, default="")                   # JSON list of follow-up drafts
+    thread = Column(Text, default="")                      # JSON list of thread messages
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -128,6 +135,32 @@ class Lead(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
+
+def migrate():
+    """Add any columns that don't exist yet on an already-created table.
+    Safe to run on every startup (works for both Postgres and SQLite)."""
+    try:
+        insp = inspect(engine)
+        existing = {c["name"] for c in insp.get_columns("leads")}
+    except Exception:
+        return
+
+    new_columns = {
+        "campaign": "VARCHAR(255)",
+        "subject": "VARCHAR(512)",
+        "reply_text": "TEXT",
+        "followups": "TEXT",
+        "thread": "TEXT",
+    }
+
+    with engine.begin() as conn:
+        for col, coltype in new_columns.items():
+            if col not in existing:
+                try:
+                    conn.execute(text(f"ALTER TABLE leads ADD COLUMN {col} {coltype}"))
+                except Exception:
+                    pass
 
 
 def _load_file_json(path):
@@ -357,6 +390,11 @@ def upsert_lead(
     replied=False,
     fup_added=False,
     main_reply="",
+    reply_text="",
+    subject="",
+    campaign="",
+    followups=None,
+    thread=None,
 ):
     external_lead_id = str(external_lead_id or "")
     reply_id = str(reply_id or "")
@@ -383,9 +421,22 @@ def upsert_lead(
         lead.replied = bool(replied)
         lead.fup_added = bool(fup_added)
         lead.main_reply = main_reply or ""
+        lead.reply_text = reply_text or ""
+        lead.subject = subject or ""
+        lead.campaign = campaign or ""
+        lead.followups = json.dumps(followups or [])
+        lead.thread = json.dumps(thread or [])
 
         session.commit()
         return lead.id
+    finally:
+        session.close()
+
+
+def get_lead(lead_id):
+    session = SessionLocal()
+    try:
+        return session.get(Lead, int(lead_id))
     finally:
         session.close()
 

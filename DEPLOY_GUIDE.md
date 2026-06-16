@@ -131,3 +131,57 @@ at `/bison-reply` and `/instantly-reply` as before.
   positives get an auto-reply; everything else is enriched + pushed to follow-up for
   you to answer manually.
 - Keep `DASHBOARD_PASSWORD` private — the dashboard is on a public URL.
+
+---
+
+## Custom domain — reply.ascendly.one
+
+1. In Railway, open the **`web`** service → **Settings** → **Networking** →
+   **Custom Domain** → enter `reply.ascendly.one`.
+2. Railway shows a **CNAME target** (something like `abcd1234.up.railway.app`).
+   Copy it.
+3. Go to wherever the DNS for **ascendly.one** is managed (your domain registrar
+   or DNS host). Add a record:
+   - Type: **CNAME**
+   - Name / Host: **reply**
+   - Value / Target: the Railway CNAME target from step 2
+   - TTL: default / automatic
+4. Save. Railway auto-issues an SSL certificate once DNS resolves (a few minutes
+   to ~an hour). When it goes green, you can use:
+   - Dashboard: `https://reply.ascendly.one/dashboard`
+   - Webhooks: `https://reply.ascendly.one/instantly-reply` and `/bison-reply`
+5. Optional: update your Instantly / Make.com webhooks to the new domain. The old
+   `web-production-….up.railway.app` URL keeps working too, so there's no rush.
+
+---
+
+## How much can this handle? (capacity)
+
+Short version: comfortable for normal agency volume; a couple of things to know
+before you scale to very high volume.
+
+- **Database:** Postgres easily holds hundreds of thousands of lead rows. No
+  concern there. The Leads page currently shows the 500 most recent — if you want
+  to browse beyond that, we'd add paging/search (quick to add when needed).
+- **The reply delay is the real limit.** Each incoming reply starts a background
+  task that *sleeps* for the reply-delay (default 420s) before processing. Those
+  sleeping tasks live inside the web process. At typical volume (dozens of replies
+  a day) this is fine. If hundreds of replies land inside the same delay window at
+  once, they start to queue and could be delayed or dropped on a restart.
+- **OpenAI:** cost and rate limits scale with reply volume; nothing breaks, it
+  just costs more / may throttle at very high volume.
+
+When you outgrow it (roughly: consistently hundreds+ of replies per day, or you
+want replies to survive a redeploy mid-delay), the upgrade is to move processing
+to a real job queue / worker instead of in-process background sleeps. Not needed
+now — just know that's the next step, and it's straightforward to add.
+
+---
+
+## What's new in the dashboard
+
+- **Light theme.**
+- **Lead detail / unibox view:** click **View** on any lead to see the
+  conversation (the prospect's reply + your AI reply) and every AI-drafted
+  follow-up step, so the whole sequence is visible at a glance.
+- Leads table now links into that detail view.
