@@ -20,8 +20,10 @@ from sqlalchemy import (
     create_engine,
     inspect,
     text,
+    or_,
     Column,
     Integer,
+    Float,
     String,
     Text,
     Boolean,
@@ -112,12 +114,16 @@ class Lead(Base):
     interested = Column(Boolean, default=None)
     intent = Column(String(255), default="")
     confidence = Column(String(50), default="")
-    action = Column(String(50), default="")                 # send / skip_enrich / stop
+    conf_num = Column(Float, default=0.0)                   # numeric confidence for filtering
+    action = Column(String(50), default="")                 # send / skip_enrich / stop / error
 
     reply_added = Column(Boolean, default=False)            # a main_reply was generated
     replied = Column(Boolean, default=False)               # reply was actually sent
     fup_added = Column(Boolean, default=False)             # follow-up variables written
+    reviewed = Column(Boolean, default=False)              # a human has reviewed it
+    owner = Column(String(255), default="")               # assigned owner
 
+    company = Column(String(255), default="")
     campaign = Column(String(255), default="")
     subject = Column(String(512), default="")
     reply_text = Column(Text, default="")                  # the prospect's incoming reply
@@ -148,10 +154,14 @@ def migrate():
 
     new_columns = {
         "campaign": "VARCHAR(255)",
+        "company": "VARCHAR(255)",
+        "owner": "VARCHAR(255)",
         "subject": "VARCHAR(512)",
         "reply_text": "TEXT",
         "followups": "TEXT",
         "thread": "TEXT",
+        "conf_num": "FLOAT",
+        "reviewed": "BOOLEAN",
     }
 
     with engine.begin() as conn:
@@ -393,12 +403,18 @@ def upsert_lead(
     reply_text="",
     subject="",
     campaign="",
+    company="",
     followups=None,
     thread=None,
 ):
     external_lead_id = str(external_lead_id or "")
     reply_id = str(reply_id or "")
     dedupe_key = f"{platform}:{external_lead_id}:{reply_id or email}"
+
+    try:
+        conf_num = float(confidence)
+    except (TypeError, ValueError):
+        conf_num = 0.0
 
     session = SessionLocal()
     try:
@@ -416,6 +432,7 @@ def upsert_lead(
         lead.interested = interested
         lead.intent = intent or ""
         lead.confidence = str(confidence or "")
+        lead.conf_num = conf_num
         lead.action = action or ""
         lead.reply_added = bool(reply_added)
         lead.replied = bool(replied)
@@ -424,6 +441,7 @@ def upsert_lead(
         lead.reply_text = reply_text or ""
         lead.subject = subject or ""
         lead.campaign = campaign or ""
+        lead.company = company or ""
         lead.followups = json.dumps(followups or [])
         lead.thread = json.dumps(thread or [])
 
@@ -441,30 +459,145 @@ def get_lead(lead_id):
         session.close()
 
 
-def list_leads(workspace=None, status=None, limit=500):
+def _apply_lead_filters(q, workspace=None, status=None, intent=None, action=None,
+                        search=None, conf_min=None, date_from=None, date_to=None):
+    if workspace:
+        q = q.filter(Lead.workspace_name == workspace)
+    if intent:
+        q = q.filter(Lead.intent == intent)
+    if action:
+        q = q.filter(Lead.action == action)
+    if search:
+        like = f"%{search.strip()}%"
+        q = q.filter(or_(
+            Lead.name.ilike(like),
+            Lead.email.ilike(like),
+            Lead.company.ilike(like),
+        ))
+    if conf_min:
+        try:
+            q = q.filter(Lead.conf_num >= float(conf_min))
+        except (TypeError, ValueError):
+            pass
+    if date_from:
+        q = q.filter(Lead.created_at >= date_from)
+    if date_to:
+        q = q.filter(Lead.created_at <= date_to)
+
+    if status == "replied" or status == "sent":
+        q = q.filter(Lead.replied.is_(True))
+    elif status == "enriched":
+        q = q.filter(Lead.fup_added.is_(True))
+    elif status == "not_enriched":
+        q = q.filter(Lead.fup_added.is_(False))
+    elif status == "stopped":
+        q = q.filter(Lead.action == "stop")
+    elif status == "needs_review":
+        q = q.filter(Lead.action.in_(["skip_enrich", "error"]),
+                     (Lead.reviewed.is_(False)) | (Lead.reviewed.is_(None)))
+    elif status == "reviewed":
+        q = q.filter(Lead.reviewed.is_(True))
+    return q
+
+
+def list_leads(workspace=None, status=None, intent=None, action=None, search=None,
+               conf_min=None, date_from=None, date_to=None, offset=0, limit=25):
     session = SessionLocal()
     try:
-        q = session.query(Lead)
-        if workspace:
-            q = q.filter(Lead.workspace_name == workspace)
-        if status == "replied":
-            q = q.filter(Lead.replied.is_(True))
-        elif status == "enriched":
-            q = q.filter(Lead.replied.is_(False), Lead.fup_added.is_(True))
-        elif status == "stopped":
-            q = q.filter(Lead.action == "stop")
-        return q.order_by(Lead.created_at.desc()).limit(limit).all()
+        q = _apply_lead_filters(session.query(Lead), workspace, status, intent,
+                                action, search, conf_min, date_from, date_to)
+        total = q.count()
+        rows = q.order_by(Lead.created_at.desc()).offset(offset).limit(limit).all()
+        return rows, total
     finally:
         session.close()
 
 
-def lead_counts():
+def export_leads(workspace=None, status=None, intent=None, action=None, search=None,
+                 conf_min=None, date_from=None, date_to=None, ids=None):
     session = SessionLocal()
     try:
-        total = session.query(Lead).count()
-        replied = session.query(Lead).filter(Lead.replied.is_(True)).count()
-        enriched = session.query(Lead).filter(Lead.fup_added.is_(True)).count()
-        stopped = session.query(Lead).filter(Lead.action == "stop").count()
-        return {"total": total, "replied": replied, "enriched": enriched, "stopped": stopped}
+        q = session.query(Lead)
+        if ids:
+            q = q.filter(Lead.id.in_(ids))
+        else:
+            q = _apply_lead_filters(q, workspace, status, intent, action,
+                                    search, conf_min, date_from, date_to)
+        return q.order_by(Lead.created_at.desc()).all()
+    finally:
+        session.close()
+
+
+def distinct_intents():
+    session = SessionLocal()
+    try:
+        rows = session.query(Lead.intent).distinct().all()
+        return sorted({r[0] for r in rows if r[0]})
+    finally:
+        session.close()
+
+
+def lead_counts(workspace=None):
+    session = SessionLocal()
+    try:
+        base = session.query(Lead)
+        if workspace:
+            base = base.filter(Lead.workspace_name == workspace)
+
+        def c(query):
+            return query.count()
+
+        total = c(base)
+        replied = c(base.filter(Lead.replied.is_(True)))
+        enriched = c(base.filter(Lead.fup_added.is_(True)))
+        stopped = c(base.filter(Lead.action == "stop"))
+        needs_review = c(base.filter(
+            Lead.action.in_(["skip_enrich", "error"]),
+            (Lead.reviewed.is_(False)) | (Lead.reviewed.is_(None)),
+        ))
+        return {
+            "total": total,
+            "replied": replied,
+            "sent": replied,
+            "enriched": enriched,
+            "stopped": stopped,
+            "needs_review": needs_review,
+        }
+    finally:
+        session.close()
+
+
+def update_lead_fields(lead_id, **fields):
+    """Set arbitrary columns on a lead. followups accepts a list (json-encoded)."""
+    session = SessionLocal()
+    try:
+        lead = session.get(Lead, int(lead_id))
+        if lead is None:
+            return False
+        for key, value in fields.items():
+            if key == "followups" and isinstance(value, list):
+                value = json.dumps(value)
+            if hasattr(lead, key):
+                setattr(lead, key, value)
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def bulk_update_leads(ids, **fields):
+    session = SessionLocal()
+    try:
+        count = 0
+        for lead_id in ids:
+            lead = session.get(Lead, int(lead_id))
+            if lead is None:
+                continue
+            for key, value in fields.items():
+                if hasattr(lead, key):
+                    setattr(lead, key, value)
+            count += 1
+        session.commit()
+        return count
     finally:
         session.close()
