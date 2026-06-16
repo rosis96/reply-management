@@ -10,20 +10,42 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI, BackgroundTasks, Request
 
+import db
+from dashboard import router as dashboard_router
+
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-EMAILBISON_BASE_URL = os.getenv("EMAILBISON_BASE_URL", "").rstrip("/")
-HUMAN_REVIEW_WEBHOOK_URL = os.getenv("HUMAN_REVIEW_WEBHOOK_URL")
-
-client = OpenAI(api_key=OPENAI_API_KEY)
 app = FastAPI()
 
-with open("config.json", "r") as f:
-    CONFIG = json.load(f)
 
-REPLY_DELAY_SECONDS = 420
+@app.on_event("startup")
+def _startup():
+    db.init_db()
+    db.seed_if_empty()
+
+
+app.include_router(dashboard_router)
+
+DEFAULT_REPLY_DELAY_SECONDS = 420
+REPLY_DELAY_SECONDS = DEFAULT_REPLY_DELAY_SECONDS  # kept for reference / fallback
 PROCESSED_FILE = "logs/processed_replies.json"
+
+
+def get_openai_client():
+    api_key = db.get_setting("openai_api_key", "") or os.getenv("OPENAI_API_KEY", "")
+    return OpenAI(api_key=api_key)
+
+
+def get_reply_delay():
+    raw = db.get_setting("reply_delay_seconds", str(DEFAULT_REPLY_DELAY_SECONDS))
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_REPLY_DELAY_SECONDS
+
+
+def get_human_review_webhook():
+    return db.get_setting("human_review_webhook_url", "") or os.getenv("HUMAN_REVIEW_WEBHOOK_URL", "")
 
 
 # -------------------------
@@ -74,6 +96,35 @@ def decide_reply_action(ai_result):
         return "send"
 
     return "skip_enrich"
+
+
+def record_lead(platform, workspace_name, external_lead_id, reply_id,
+                ai_result, action, replied, fup_added,
+                latest_reply=None, name="", email=""):
+    """Write/update the lead row that powers the dashboard. Never raises."""
+    try:
+        if latest_reply:
+            name = name or latest_reply.get("from_name", "") or ""
+            email = email or latest_reply.get("from_email_address", "") or ""
+
+        db.upsert_lead(
+            platform=platform,
+            external_lead_id=external_lead_id,
+            reply_id=reply_id,
+            workspace_name=workspace_name,
+            name=name,
+            email=email,
+            interested=(latest_reply.get("interested") if latest_reply else True),
+            intent=ai_result.get("intent", ""),
+            confidence=ai_result.get("confidence", ""),
+            action=action,
+            reply_added=bool(ai_result.get("main_reply")),
+            replied=replied,
+            fup_added=fup_added,
+            main_reply=ai_result.get("main_reply", ""),
+        )
+    except Exception as ex:
+        log(f"Failed to record lead in dashboard DB: {ex}")
 
 
 def log(message):
@@ -449,6 +500,8 @@ Return ONLY valid JSON:
 }}
 """
 
+    client = get_openai_client()
+
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
@@ -490,8 +543,9 @@ Return ONLY valid JSON:
 
 
 def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
-    if not HUMAN_REVIEW_WEBHOOK_URL:
-        log("No HUMAN_REVIEW_WEBHOOK_URL set.")
+    webhook_url = get_human_review_webhook()
+    if not webhook_url:
+        log("No human review webhook URL set.")
         return None
 
     payload = {
@@ -505,7 +559,7 @@ def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
     }
 
     try:
-        response = requests.post(HUMAN_REVIEW_WEBHOOK_URL, json=payload, timeout=15)
+        response = requests.post(webhook_url, json=payload, timeout=15)
         log(f"Human review webhook sent: {response.status_code}")
         return response.text
     except Exception as e:
@@ -517,8 +571,8 @@ def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
 # EmailBison
 # -------------------------
 
-def fetch_replies(lead_id, api_key):
-    url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}/replies"
+def fetch_replies(lead_id, api_key, base_url):
+    url = f"{base_url}/api/leads/{lead_id}/replies"
     response = requests.get(url, headers=bison_headers(api_key))
 
     if response.status_code != 200:
@@ -528,8 +582,8 @@ def fetch_replies(lead_id, api_key):
     return response.json().get("data", [])
 
 
-def fetch_sent_emails(lead_id, api_key):
-    url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}/sent-emails"
+def fetch_sent_emails(lead_id, api_key, base_url):
+    url = f"{base_url}/api/leads/{lead_id}/sent-emails"
     response = requests.get(url, headers=bison_headers(api_key))
 
     if response.status_code != 200:
@@ -573,8 +627,8 @@ def get_latest_reply(replies):
     return replies[0]
 
 
-def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, api_key):
-    url = f"{EMAILBISON_BASE_URL}/api/replies/{reply_id}/reply"
+def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, api_key, base_url):
+    url = f"{base_url}/api/replies/{reply_id}/reply"
 
     payload = {
         "message": message,
@@ -598,8 +652,8 @@ def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, a
     return response.json()
 
 
-def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key):
-    url = f"{EMAILBISON_BASE_URL}/api/leads/{lead_id}"
+def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key, base_url):
+    url = f"{base_url}/api/leads/{lead_id}"
 
     full_name = latest_reply.get("from_name", "") or ""
     name_parts = full_name.split(" ", 1)
@@ -634,8 +688,8 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key):
     return response.json()
 
 
-def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key):
-    url = f"{EMAILBISON_BASE_URL}/api/campaigns/{campaign_id}/leads/attach-leads"
+def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key, base_url):
+    url = f"{base_url}/api/campaigns/{campaign_id}/leads/attach-leads"
 
     payload = {"lead_ids": [lead_id]}
 
@@ -649,32 +703,37 @@ def attach_lead_to_followup_campaign(lead_id, campaign_id, api_key):
 
 
 def process_reply(lead_id, workspace_name):
-    log(f"Received job for lead {lead_id}. Waiting {REPLY_DELAY_SECONDS} seconds before replying.")
-    time.sleep(REPLY_DELAY_SECONDS)
+    delay = get_reply_delay()
+    log(f"Received job for lead {lead_id}. Waiting {delay} seconds before replying.")
+    time.sleep(delay)
 
-    if workspace_name not in CONFIG["workspaces"]:
+    workspace = db.get_workspace_config(workspace_name)
+
+    if not workspace:
         log(f"Unknown workspace: {workspace_name}")
         return
 
-    workspace = CONFIG["workspaces"][workspace_name]
-
-    api_key_env = workspace["api_key_env"]
-    workspace_bison_api_key = os.getenv(api_key_env)
+    workspace_bison_api_key = workspace.get("api_key")
+    base_url = (workspace.get("base_url") or db.get_setting("emailbison_base_url", "")).rstrip("/")
 
     if not workspace_bison_api_key:
-        log(f"Missing API key for workspace {workspace_name}. Expected env: {api_key_env}")
+        log(f"Missing API key for workspace {workspace_name}. Add it in the dashboard.")
+        return
+
+    if not base_url:
+        log(f"Missing Bison base URL for workspace {workspace_name}. Add it in the dashboard or Settings.")
         return
 
     reply_followup_campaign_id = workspace["reply_followup_campaign_id"]
 
-    client_profile = load_json_file(f"client_profiles/{workspace['client_profile']}")
+    client_profile = workspace.get("client_profile", {})
     website = workspace.get("website", "")
     default_sender_email = workspace.get("default_sender_email", "")
     default_sender_name = workspace.get("sender_name", "")
-    reply_format = load_json_file(f"reply_formats/{workspace['reply_format']}")
+    reply_format = workspace.get("reply_format", {})
 
     log("Fetching replies...")
-    replies = fetch_replies(lead_id, workspace_bison_api_key)
+    replies = fetch_replies(lead_id, workspace_bison_api_key, base_url)
 
     valid_replies = [
         r for r in replies
@@ -700,7 +759,7 @@ def process_reply(lead_id, workspace_name):
         return
 
     log("Fetching sent emails...")
-    sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key)
+    sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key, base_url)
 
     sender_email = get_sender_email_from_sent_emails(sent_emails) or default_sender_email
     sender_name = get_sender_name_from_sent_emails(sent_emails) or sender_name_from_email(sender_email) or default_sender_name or "Team"
@@ -727,6 +786,17 @@ def process_reply(lead_id, workspace_name):
     if action == "stop":
         log("Stop intent (opt-out / out-of-office / automated / wrong person). Not sending, not enriching.")
         save_processed_reply(reply_id)
+        record_lead(
+            platform="bison",
+            workspace_name=workspace_name,
+            external_lead_id=lead_id,
+            reply_id=reply_id,
+            latest_reply=latest_reply,
+            ai_result=ai_result,
+            action=action,
+            replied=False,
+            fup_added=False,
+        )
         return
 
     send_result = None
@@ -739,7 +809,8 @@ def process_reply(lead_id, workspace_name):
             sender_email_id=latest_reply["sender_email_id"],
             to_name=latest_reply["from_name"],
             to_email=latest_reply["from_email_address"],
-            api_key=workspace_bison_api_key
+            api_key=workspace_bison_api_key,
+            base_url=base_url
         )
         if send_result:
             save_processed_reply(reply_id)
@@ -754,14 +825,28 @@ def process_reply(lead_id, workspace_name):
         lead_id=lead_id,
         ai_result=ai_result,
         latest_reply=latest_reply,
-        api_key=workspace_bison_api_key
+        api_key=workspace_bison_api_key,
+        base_url=base_url
     )
 
     log("Attaching lead to reply follow-up campaign...")
     attach_result = attach_lead_to_followup_campaign(
         lead_id=lead_id,
         campaign_id=reply_followup_campaign_id,
-        api_key=workspace_bison_api_key
+        api_key=workspace_bison_api_key,
+        base_url=base_url
+    )
+
+    record_lead(
+        platform="bison",
+        workspace_name=workspace_name,
+        external_lead_id=lead_id,
+        reply_id=reply_id,
+        latest_reply=latest_reply,
+        ai_result=ai_result,
+        action=action,
+        replied=bool(send_result),
+        fup_added=bool(update_result),
     )
 
     final_log = {
@@ -908,21 +993,23 @@ def update_instantly_lead(lead_id, ai_result, api_key):
         return response.text
 
 
-def process_instantly_reply(payload):
-    log(f"Received Instantly job. Waiting {REPLY_DELAY_SECONDS} seconds before replying.")
-    time.sleep(REPLY_DELAY_SECONDS)
+def process_instantly_reply(payload, workspace_name="Webaholics"):
+    delay = get_reply_delay()
+    log(f"Received Instantly job. Waiting {delay} seconds before replying.")
+    time.sleep(delay)
     log("Processing Instantly reply webhook...")
     log(json.dumps(payload, indent=2))
-    ...
 
-    workspace_name = "Webaholics"
-    workspace = CONFIG["workspaces"][workspace_name]
+    workspace = db.get_workspace_config(workspace_name)
 
-    api_key_env = workspace["api_key_env"]
-    instantly_api_key = os.getenv(api_key_env)
+    if not workspace:
+        log(f"Unknown Instantly workspace: {workspace_name}")
+        return
+
+    instantly_api_key = workspace.get("api_key")
 
     if not instantly_api_key:
-        log(f"Missing Instantly API key: {api_key_env}")
+        log(f"Missing Instantly API key for workspace {workspace_name}. Add it in the dashboard.")
         return
 
     email = payload.get("lead_email", "") or payload.get("email", "")
@@ -953,8 +1040,8 @@ def process_instantly_reply(payload):
         }
     ]
 
-    client_profile = load_json_file("client_profiles/webaholics.json")
-    reply_format = load_json_file("reply_formats/webaholics_reply_formats.json")
+    client_profile = workspace.get("client_profile", {})
+    reply_format = workspace.get("reply_format", {})
 
     log("Generating Instantly AI reply + followups...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread)
@@ -975,7 +1062,7 @@ def process_instantly_reply(payload):
     if not sender_name:
         sender_name = "Team"
 
-    website = workspace.get("website", "https://www.webaholics.ai")
+    website = workspace.get("website", "") or "https://www.webaholics.ai"
 
     log(f"Instantly sender_email: {sender_email}")
     log(f"Instantly sender_name: {sender_name}")
@@ -998,6 +1085,18 @@ def process_instantly_reply(payload):
             "payload": payload,
             "ai_result": ai_result
         })
+        record_lead(
+            platform="instantly",
+            workspace_name=workspace_name,
+            external_lead_id=lead_id,
+            reply_id="",
+            ai_result=ai_result,
+            action=action,
+            replied=False,
+            fup_added=False,
+            name=first_name,
+            email=email,
+        )
         return
 
     send_result = None
@@ -1034,6 +1133,19 @@ def process_instantly_reply(payload):
         lead_id=lead_id,
         ai_result=ai_result,
         api_key=instantly_api_key
+    )
+
+    record_lead(
+        platform="instantly",
+        workspace_name=workspace_name,
+        external_lead_id=lead_id,
+        reply_id="",
+        ai_result=ai_result,
+        action=action,
+        replied=bool(send_result),
+        fup_added=bool(update_result),
+        name=first_name,
+        email=email,
     )
 
     final_log = {
@@ -1089,7 +1201,7 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
         "message": "Reply job accepted",
         "lead_id": lead_id,
         "workspace_name": workspace_name,
-        "delay_seconds": REPLY_DELAY_SECONDS
+        "delay_seconds": get_reply_delay()
     }
 
 
@@ -1097,7 +1209,8 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
 async def instantly_reply_webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
 
-    background_tasks.add_task(process_instantly_reply, payload)
+    workspace_name = payload.get("workspace_name", "Webaholics")
+    background_tasks.add_task(process_instantly_reply, payload, workspace_name)
 
     return {
         "success": True,
