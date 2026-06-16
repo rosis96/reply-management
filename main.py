@@ -1188,6 +1188,8 @@ def test_run():
 async def bison_reply_webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
 
+    log(f"Bison webhook RECEIVED: {json.dumps(payload)[:2000]}")
+
     lead_id = payload.get("lead_id")
     workspace_name = payload.get("workspace_name", "Insight Media Labs")
 
@@ -1205,14 +1207,42 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
     }
 
 
+def resolve_instantly_workspace(payload):
+    """Figure out which workspace an Instantly reply belongs to.
+
+    1. Use workspace_name from the payload if it's present and valid.
+    2. Otherwise, if exactly one Instantly workspace is marked Active, use it.
+    3. Otherwise fall back to 'Webaholics'.
+    """
+    name = payload.get("workspace_name") or payload.get("workspace")
+    if name and db.get_workspace_config(name):
+        return name
+
+    try:
+        active_instantly = [
+            w for w in db.list_workspaces()
+            if (w.platform == "instantly" and w.active)
+        ]
+        if len(active_instantly) == 1:
+            return active_instantly[0].name
+    except Exception as ex:
+        log(f"Instantly workspace auto-detect failed: {ex}")
+
+    return "Webaholics"
+
+
 @app.post("/instantly-reply")
 async def instantly_reply_webhook(request: Request, background_tasks: BackgroundTasks):
     payload = await request.json()
 
-    workspace_name = payload.get("workspace_name", "Webaholics")
+    log(f"Instantly webhook RECEIVED: {json.dumps(payload)[:2000]}")
+    workspace_name = resolve_instantly_workspace(payload)
+    log(f"Instantly webhook routed to workspace: {workspace_name}")
+
     background_tasks.add_task(process_instantly_reply, payload, workspace_name)
 
     return {
         "success": True,
-        "message": "Instantly reply received"
+        "message": "Instantly reply received",
+        "workspace_name": workspace_name
     }
