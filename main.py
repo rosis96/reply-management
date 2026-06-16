@@ -22,6 +22,10 @@ app = FastAPI()
 def _startup():
     db.init_db()
     db.seed_if_empty()
+    if db.IS_SQLITE:
+        log("DB backend: SQLITE (ephemeral). On Railway this means DATABASE_URL is NOT connected -- data WILL reset on every redeploy. Connect Postgres!")
+    else:
+        log("DB backend: POSTGRES (persistent).")
 
 
 app.include_router(dashboard_router)

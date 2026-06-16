@@ -46,6 +46,7 @@ if not DATABASE_URL:
     DATABASE_URL = "sqlite:///reply_management.db"
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
+IS_SQLITE = _is_sqlite
 
 engine = create_engine(
     DATABASE_URL,
