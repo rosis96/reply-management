@@ -1401,17 +1401,31 @@ def test_run():
 
 @app.post("/bison-reply")
 async def bison_reply_webhook(request: Request, background_tasks: BackgroundTasks):
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
 
     log(f"Bison webhook RECEIVED: {json.dumps(payload)[:2000]}")
 
-    lead_id = payload.get("lead_id")
-    workspace_name = payload.get("workspace_name", "Insight Media Labs")
+    # Workspace can come from the URL query (?workspace_name=...), so Bison's
+    # native webhook can route directly without Make.com reshaping the body.
+    qp = request.query_params
+    workspace_name = (qp.get("workspace_name") or qp.get("ws")
+                      or (payload.get("workspace_name") if isinstance(payload, dict) else None)
+                      or "Insight Media Labs")
 
-    if not lead_id:
+    raw_lead = extract_bison_lead_id(payload)
+    if not raw_lead:
+        log("Bison webhook: could not find a lead id in the payload.")
         return {"success": False, "error": "Missing lead_id"}
 
-    background_tasks.add_task(process_reply, int(lead_id), workspace_name)
+    try:
+        lead_id = int(raw_lead)
+    except (TypeError, ValueError):
+        lead_id = raw_lead
+
+    background_tasks.add_task(process_reply, lead_id, workspace_name)
 
     return {
         "success": True,
@@ -1420,6 +1434,22 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
         "workspace_name": workspace_name,
         "delay_seconds": get_reply_delay()
     }
+
+
+def extract_bison_lead_id(payload):
+    """Pull a lead id out of whatever shape Bison's webhook sends."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("lead_id", "leadId", "lead_uuid", "id"):
+        if payload.get(key):
+            return payload.get(key)
+    for parent in ("lead", "data", "reply", "payload", "resource"):
+        sub = payload.get(parent)
+        if isinstance(sub, dict):
+            for key in ("lead_id", "leadId", "id", "uuid"):
+                if sub.get(key):
+                    return sub.get(key)
+    return None
 
 
 def resolve_instantly_workspace(payload):

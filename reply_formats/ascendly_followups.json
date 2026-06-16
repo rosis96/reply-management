@@ -1,0 +1,76 @@
+{
+  "format_name": "Ascendly Follow-up Sequence Format",
+  "purpose": "Use this format ONLY in a follow-up-mode workspace. The prospect already replied and we already responded, then they went quiet. Read the thread and continue from where it left off. main_reply is the FIRST follow-up (sent immediately); followup_1 through followup_6 are the next six, loaded as variables for the follow-up campaign.",
+  "mode": "followup",
+  "main_reply": {
+    "label": "FUP 1 (sent immediately)",
+    "word_count": "70-110 words",
+    "template": "Hey {{FirstName}},\n\nI didn't get a chance to follow up again. Curious if {{CompanyName}} is currently focused on {{goal or problem we solve}}.\n\nI'd be glad to share how companies like Future.works and Webaholics are tackling this and the results they've been seeing.\n\nDoes {{Day/Time Option 1}} or {{Day/Time Option 2}} work best for a quick call?"
+  },
+  "followups": {
+    "followup_1": {
+      "label": "FUP 2",
+      "max_words": 110,
+      "template": "Hey {{FirstName}},\n\nWe were in a conversation recently but never got a chance to take it further.\n\nJust a bit more about us to grab your attention: {{pick ONE value point not used earlier in this thread and explain what we do in a personalized way, 40-50 words}}.\n\nI'd love to share more and lock in a time, ideally a quick Google Meet where I can walk you through real-time dashboards, past projects, and the vision we're building.\n\nHere is my calendar: https://calendly.com/rosis/new-meeting\n\nFeel free to grab a time, or simply share yours."
+    },
+    "followup_2": {
+      "label": "FUP 3",
+      "max_words": 120,
+      "template": "Hey {{FirstName}},\n\nI've been following up to see if we can get a quick conversation.\n\nI realized we may need to share more: {{explain the process in detail, including results, numbers, offers, case studies, and how everything works}}.\n\nWe've done similar work for Webaholics, InsightGeo.ai, and Future.works. I'd also love to walk you through {{what we will show them on the call}}.\n\nDoes next week on Monday or Tuesday at 11 AM, noon, or 1 PM work? Let me know and I'll send the invitation."
+    },
+    "followup_3": {
+      "label": "FUP 4",
+      "max_words": 120,
+      "template": "Hey {{FirstName}},\n\nThank you for your initial response and for engaging with us. Normally that tells me there may be a challenge or goal we can help with.\n\nAnd when we believe we can genuinely help, should we really disappear and leave the conversation there? Haha, just kidding.\n\nBut I'm trying to stay consistent and show you {{what we do and what we'd like to show you}}.\n\nHere is my availability next week:\nTuesday: {{time options}}\nWednesday: {{time options}}\nThursday: {{time options}}\n\nPlease let me know what works best and I'll send the invitation right away."
+    },
+    "followup_4": {
+      "label": "FUP 5",
+      "max_words": 90,
+      "template": "Hey {{FirstName}},\n\nWe were in a conversation and proposed a few times that worked on our end, but never received a confirmation. Those times are long gone.\n\nHere are some updated options so we can continue discussing what initially caught your interest.\n\nNext week:\n{{updated availability}}\n\nLet me know what works best."
+    },
+    "followup_5": {
+      "label": "FUP 6 (breakup)",
+      "max_words": 75,
+      "template": "{{FirstName}} —\n\nI've reached out a few times but haven't heard back, so I'm assuming Ascendly is not something you're interested in exploring right now. Is that right?\n\nEither way, please let me know. Certainly don't want to be a pest."
+    },
+    "followup_6": {
+      "label": "FUP 7 (pain-point re-engagement)",
+      "max_words": 100,
+      "template": "Hi {{FirstName}},\n\nWe've heard from other {{persona}}s that {{common problem}}. Sound familiar?\n\nImagine reducing {{problem or bottleneck}} by {{desired improvement}}. Others have been turning to Ascendly to {{desired outcome}} without {{common objection or tradeoff}}.\n\n{{short, relevant case study}}\n\nMind if I share a bit more information?"
+    }
+  },
+  "placeholder_rules": {
+    "{{FirstName}}": "Replace with the prospect's actual first name from the thread / lead data. If unavailable, use 'there'.",
+    "{{CompanyName}}": "Replace with the prospect's actual company from the thread / lead data. If unavailable, rewrite the line so it reads naturally without it.",
+    "{{goal or problem we solve}}": "A specific outcome relevant to this prospect, e.g. inconsistent lead flow, generating more qualified sales meetings, or improving pipeline quality.",
+    "{{Day/Time Option 1}} and {{Day/Time Option 2}}": "Two natural slots at least 2 working days out, weekdays only, 10 AM to 2 PM. Example: Tuesday at 11 AM, or Wednesday at noon.",
+    "{{pick ONE value point...}}": "Choose one value point NOT used elsewhere in this sequence and explain it in 40-50 personalized words.",
+    "{{explain the process in detail...}}": "Explain the process, results, numbers, offers, and how it works, tailored to this prospect.",
+    "{{what we will show them on the call}}": "Concrete items you'd show on the call, tied to their situation.",
+    "{{time options}} and {{updated availability}}": "Weekday slots, 10 AM to 2 PM, at least 2 working days out. Keep each day on its own line.",
+    "{{persona}} / {{common problem}} / {{problem or bottleneck}} / {{desired improvement}} / {{desired outcome}} / {{common objection or tradeoff}} / {{short, relevant case study}}": "Fill each with specific, personalized content based on the client profile and the prospect. Never leave a {{...}} placeholder in the final output.",
+    "calendar_link": "Always keep exactly: https://calendly.com/rosis/new-meeting"
+  },
+  "scheduling_rules": {
+    "minimum_notice": "Suggest times at least 2 working days after the prospect's last message.",
+    "working_days_only": true,
+    "avoid_weekends": true,
+    "preferred_time_window": "10 AM to 2 PM",
+    "proposal_style": "Offer natural day + time options, e.g. next week on Tuesday at 10 AM, noon, or 1 PM."
+  },
+  "signature_rule": "Do NOT write sign-offs (Best, Kind regards, Regards), sender name, initials, or website inside any message. For FUP 1 (main_reply) the system adds the signature automatically. For the campaign follow-ups (followup_1 to followup_6), add your signature ONCE in the Bison campaign step template, not inside the variable.",
+  "formatting_rules": {
+    "line_breaks": "Use one blank line (\\n\\n) between paragraphs. Keep day/time lists on their own lines with a single \\n.",
+    "no_em_dash": true,
+    "no_markdown": true,
+    "no_bullets_in_email": true,
+    "tone": "Warm, human, direct, persistent but not pushy. Continue the thread; never restart the pitch or repeat an earlier message.",
+    "avoid": [
+      "hype",
+      "robotic language",
+      "repeating the same angle twice",
+      "leaving any {{...}} placeholder unfilled",
+      "duplicate signatures"
+    ]
+  }
+}
