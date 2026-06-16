@@ -142,7 +142,7 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
             reply_text = reply_text or latest_reply.get("body", "") or latest_reply.get("text_body", "") or ""
             subject = subject or latest_reply.get("subject", "") or ""
 
-        followups = [ai_result.get(f"followup_{i}", "") for i in range(1, 7)]
+        followups = [ai_result.get(f"followup_{i}", "") for i in range(1, 9)]
 
         db.upsert_lead(
             platform=platform,
@@ -465,7 +465,62 @@ def add_signature(message, sender_name, website):
     return message
 
 
-def generate_ai_reply(client_profile, reply_format, thread):
+FOLLOWUP_SYSTEM = (
+    "You write outbound sales FOLLOW-UPS that continue an existing email thread to re-engage a "
+    "quiet prospect and book a meeting. Return only valid JSON. No markdown. Never add sign-offs, "
+    "sender names, initials, websites, or signatures (the system adds those). Each message stands "
+    "alone, is short and human, continues the conversation (never restarts the pitch), and ends "
+    "with a clear low-friction next step."
+)
+
+
+def _followup_prompt(client_profile, reply_format, thread):
+    return f"""
+You are writing a sequence of follow-ups for a prospect who replied positively earlier and whom we
+ALREADY responded to, but who has since gone quiet. Read the full thread and continue naturally from
+where it left off. Do NOT restate the original reply or re-introduce the offer from scratch.
+
+CLIENT PROFILE:
+{json.dumps(client_profile, indent=2)}
+
+FOLLOW-UP FORMAT RULES:
+{json.dumps(reply_format, indent=2)}
+
+EMAIL THREAD (oldest to newest):
+{json.dumps(thread, indent=2)}
+
+---
+Write a follow-up sequence:
+- "main_reply": the FIRST follow-up to send NOW. Lightly reference the prior conversation, add a fresh
+  reason to talk, and propose a next step. Short and human.
+- "followup_1" through "followup_8": the next eight follow-ups, each a DIFFERENT angle (new value,
+  social proof, soft check-in, scheduling nudge, a relevant question, a light breakup near the end),
+  escalating sensibly over a month. Each stands alone, short, ends with a clear next step.
+
+RULES:
+- Continue the thread; never re-introduce the offer from scratch or repeat the first reply.
+- No sign-offs, names, initials, websites, or signatures.
+- No em dashes. No buzzwords or hype. Vary rhythm. Keep most under ~90 words.
+- Every message ends with a clear next step or question.
+
+Return ONLY valid JSON:
+{{
+  "intent": "followup",
+  "confidence": 1,
+  "human_review_needed": false,
+  "main_reply": "",
+  "followup_1": "", "followup_2": "", "followup_3": "", "followup_4": "",
+  "followup_5": "", "followup_6": "", "followup_7": "", "followup_8": ""
+}}
+"""
+
+
+def generate_ai_reply(client_profile, reply_format, thread, mode="reply"):
+    if mode == "followup":
+        prompt = _followup_prompt(client_profile, reply_format, thread)
+        system_msg = FOLLOWUP_SYSTEM
+        return _call_openai(prompt, system_msg)
+
     prompt = f"""
 You are an expert outbound sales reply writer. Your job is to write replies that feel like they came from a sharp, real human — not a sales bot.
 
@@ -561,6 +616,14 @@ Return ONLY valid JSON:
 }}
 """
 
+    system_msg = ("You write outbound sales replies that sound like a sharp, real human. Return only "
+                  "valid JSON. No markdown. Never add sign-offs, sender names, initials, websites, or "
+                  "signatures. Stop right after the CTA or final message. NEVER return an empty "
+                  "main_reply unless intent is unsubscribe or negative_not_interested.")
+    return _call_openai(prompt, system_msg)
+
+
+def _call_openai(prompt, system_msg):
     client = get_openai_client()
 
     for attempt in range(3):
@@ -569,23 +632,14 @@ Return ONLY valid JSON:
                 model="gpt-4.1",
                 temperature=0.6,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You write outbound sales replies that sound like a sharp, real human. Return only valid JSON. No markdown. Never add sign-offs, sender names, initials, websites, or signatures. Stop right after the CTA or final message. NEVER return an empty main_reply unless intent is unsubscribe or negative_not_interested."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt},
+                ],
             )
-
             raw = response.choices[0].message.content.strip()
             return json.loads(raw)
-
         except Exception as e:
             log(f"OpenAI attempt {attempt + 1} failed: {str(e)}")
-
             if attempt < 2:
                 time.sleep(3)
 
@@ -594,12 +648,8 @@ Return ONLY valid JSON:
         "confidence": 0,
         "human_review_needed": True,
         "main_reply": "",
-        "followup_1": "",
-        "followup_2": "",
-        "followup_3": "",
-        "followup_4": "",
-        "followup_5": "",
-        "followup_6": ""
+        "followup_1": "", "followup_2": "", "followup_3": "", "followup_4": "",
+        "followup_5": "", "followup_6": "", "followup_7": "", "followup_8": "",
     }
 
 
@@ -723,21 +773,30 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key, base_
     last_name = name_parts[1] if len(name_parts) > 1 and name_parts[1] else "Unknown"
     email = latest_reply.get("from_email_address", "")
 
+    custom_vars = [
+        {"name": "main_reply", "value": ai_result.get("main_reply", "")},
+        {"name": "followup_1", "value": ai_result.get("followup_1", "")},
+        {"name": "followup_2", "value": ai_result.get("followup_2", "")},
+        {"name": "followup_3", "value": ai_result.get("followup_3", "")},
+        {"name": "followup_4", "value": ai_result.get("followup_4", "")},
+        {"name": "followup_5", "value": ai_result.get("followup_5", "")},
+        {"name": "followup_6", "value": ai_result.get("followup_6", "")},
+    ]
+    # FUP7/FUP8 only when present (follow-up mode), so normal workspaces are unchanged.
+    for i in (7, 8):
+        val = ai_result.get(f"followup_{i}", "")
+        if val:
+            custom_vars.append({"name": f"followup_{i}", "value": val})
+    custom_vars += [
+        {"name": "reply_intent", "value": ai_result.get("intent", "")},
+        {"name": "reply_confidence", "value": str(ai_result.get("confidence", ""))},
+    ]
+
     payload = {
         "first_name": first_name,
         "last_name": last_name,
         "email": email,
-        "custom_variables": [
-            {"name": "main_reply", "value": ai_result.get("main_reply", "")},
-            {"name": "followup_1", "value": ai_result.get("followup_1", "")},
-            {"name": "followup_2", "value": ai_result.get("followup_2", "")},
-            {"name": "followup_3", "value": ai_result.get("followup_3", "")},
-            {"name": "followup_4", "value": ai_result.get("followup_4", "")},
-            {"name": "followup_5", "value": ai_result.get("followup_5", "")},
-            {"name": "followup_6", "value": ai_result.get("followup_6", "")},
-            {"name": "reply_intent", "value": ai_result.get("intent", "")},
-            {"name": "reply_confidence", "value": str(ai_result.get("confidence", ""))}
-        ]
+        "custom_variables": custom_vars,
     }
 
     response = requests.put(url, headers=bison_headers(api_key), json=payload)
@@ -786,6 +845,7 @@ def process_reply(lead_id, workspace_name):
         return
 
     reply_followup_campaign_id = workspace["reply_followup_campaign_id"]
+    mode = workspace.get("mode", "reply")
 
     client_profile = workspace.get("client_profile", {})
     website = workspace.get("website", "")
@@ -815,7 +875,8 @@ def process_reply(lead_id, workspace_name):
     reply_id = latest_reply["id"]
     processed_replies = load_processed_replies()
 
-    if reply_id in processed_replies:
+    # Follow-up mode is meant to be re-run on past leads, so skip the dedupe guard.
+    if mode != "followup" and reply_id in processed_replies:
         log(f"Reply {reply_id} already processed. Stopping.")
         return
 
@@ -831,8 +892,8 @@ def process_reply(lead_id, workspace_name):
     log("Building thread...")
     thread = build_thread(sent_emails, valid_replies)
 
-    log("Generating AI reply + followups...")
-    ai_result = generate_ai_reply(client_profile, reply_format, thread)
+    log(f"Generating AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
+    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode)
 
     if ai_result.get("main_reply"):
         ai_result["main_reply"] = add_signature(
@@ -841,8 +902,9 @@ def process_reply(lead_id, workspace_name):
             website
         )
 
-    action = decide_reply_action(ai_result)
-    log(f"Reply action: {action} (intent={ai_result.get('intent')})")
+    # Follow-up mode always sends the first follow-up + enriches; otherwise classify.
+    action = "send" if mode == "followup" else decide_reply_action(ai_result)
+    log(f"Reply action: {action} (mode={mode}, intent={ai_result.get('intent')})")
 
     if action == "stop":
         log("Stop intent (opt-out / out-of-office / automated / wrong person). Not sending, not enriching.")
@@ -1036,19 +1098,25 @@ def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
 def update_instantly_lead(lead_id, ai_result, api_key):
     url = f"https://api.instantly.ai/api/v2/leads/{lead_id}"
 
+    custom_vars = {
+        "main_reply": ai_result.get("main_reply", ""),
+        "followup_1": ai_result.get("followup_1", ""),
+        "followup_2": ai_result.get("followup_2", ""),
+        "followup_3": ai_result.get("followup_3", ""),
+        "followup_4": ai_result.get("followup_4", ""),
+        "followup_5": ai_result.get("followup_5", ""),
+        "followup_6": ai_result.get("followup_6", ""),
+        "reply_intent": ai_result.get("intent", ""),
+        "reply_confidence": str(ai_result.get("confidence", "")),
+    }
+    for i in (7, 8):
+        val = ai_result.get(f"followup_{i}", "")
+        if val:
+            custom_vars[f"followup_{i}"] = val
+
     payload = {
-        "custom_variables": {
-            "main_reply": ai_result.get("main_reply", ""),
-            "followup_1": ai_result.get("followup_1", ""),
-            "followup_2": ai_result.get("followup_2", ""),
-            "followup_3": ai_result.get("followup_3", ""),
-            "followup_4": ai_result.get("followup_4", ""),
-            "followup_5": ai_result.get("followup_5", ""),
-            "followup_6": ai_result.get("followup_6", ""),
-            "reply_intent": ai_result.get("intent", ""),
-            "reply_confidence": str(ai_result.get("confidence", ""))
-        },
-        "lead_label": "FUP1"
+        "custom_variables": custom_vars,
+        "lead_label": "FUP1",
     }
 
     response = requests.patch(url, headers=instantly_headers(api_key), json=payload)
@@ -1161,9 +1229,10 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
 
     client_profile = workspace.get("client_profile", {})
     reply_format = workspace.get("reply_format", {})
+    mode = workspace.get("mode", "reply")
 
-    log("Generating Instantly AI reply + followups...")
-    ai_result = generate_ai_reply(client_profile, reply_format, thread)
+    log(f"Generating Instantly AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
+    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode)
 
     sender_email = extract_email_from_anything(payload.get("eaccount"))
     if not sender_email:
@@ -1196,8 +1265,8 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
             website
         )
 
-    action = decide_reply_action(ai_result)
-    log(f"Instantly reply action: {action} (intent={ai_result.get('intent')})")
+    action = "send" if mode == "followup" else decide_reply_action(ai_result)
+    log(f"Instantly reply action: {action} (mode={mode}, intent={ai_result.get('intent')})")
 
     if action == "stop":
         log("Instantly stop intent (opt-out / out-of-office / automated / wrong person). Not sending, not enriching.")

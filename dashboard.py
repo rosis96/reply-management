@@ -1190,6 +1190,9 @@ def _workspace_form(ws=None, error="", current_ws=""):
     title = "Add workspace" if is_new else f"Edit: {name}"
     bsel = " selected" if platform == "bison" else ""
     isel = " selected" if platform == "instantly" else ""
+    mode = "reply" if is_new else (ws.mode or "reply")
+    mrep = " selected" if mode == "reply" else ""
+    mfup = " selected" if mode == "followup" else ""
     err = f'<div class="card" style="border-color:var(--no);color:var(--no)">{e(error)}</div>' if error else ""
     delbtn = "" if is_new else f"""<form method="post" action="/dashboard/workspaces/{ws.id}/delete" onsubmit="return confirm('Delete this workspace?')" style="display:inline"><button class="btn danger" type="submit">Delete</button></form>"""
     body = f"""
@@ -1201,6 +1204,8 @@ def _workspace_form(ws=None, error="", current_ws=""):
           <div><label>Workspace name</label><input type="text" name="name" value="{e(name)}" required style="width:100%"></div>
           <div><label>Platform</label><select name="platform" style="width:100%"><option value="bison"{bsel}>bison</option><option value="instantly"{isel}>instantly</option></select></div>
         </div>
+        <label>Mode</label>
+        <select name="mode" style="width:100%"><option value="reply"{mrep}>reply (normal)</option><option value="followup"{mfup}>follow-up (thread-aware, FUP1-FUP8)</option></select>
         <label>API key</label><input type="text" name="api_key" value="{e(g('api_key'))}" style="width:100%">
         <div class="row2">
           <div><label>Base URL (Bison only)</label><input type="text" name="base_url" value="{e(g('base_url'))}" placeholder="https://your-bison-instance.com" style="width:100%"></div>
@@ -1248,6 +1253,7 @@ async def _read_workspace_form(request: Request):
     form = await request.form()
     return {
         "name": form.get("name", ""), "platform": form.get("platform", "bison"),
+        "mode": form.get("mode", "reply"),
         "api_key": form.get("api_key", ""), "base_url": form.get("base_url", ""),
         "reply_followup_campaign_id": form.get("reply_followup_campaign_id", ""),
         "website": form.get("website", ""), "sender_name": form.get("sender_name", ""),

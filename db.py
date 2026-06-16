@@ -72,6 +72,7 @@ class Workspace(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True, nullable=False)
     platform = Column(String(50), default="bison")          # "bison" or "instantly"
+    mode = Column(String(20), default="reply")              # "reply" or "followup" (temporary)
     active = Column(Boolean, default=True)
 
     api_key = Column(Text, default="")
@@ -149,6 +150,15 @@ def init_db():
 def migrate():
     """Add any columns that don't exist yet on an already-created table.
     Safe to run on every startup (works for both Postgres and SQLite)."""
+    # workspaces table additions
+    try:
+        ws_cols = {c["name"] for c in inspect(engine).get_columns("workspaces")}
+        if "mode" not in ws_cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE workspaces ADD COLUMN mode VARCHAR(20)"))
+    except Exception:
+        pass
+
     try:
         insp = inspect(engine)
         existing = {c["name"] for c in insp.get_columns("leads")}
@@ -293,6 +303,7 @@ def get_workspace_config(name):
             return {
                 "name": ws.name,
                 "platform": ws.platform or "bison",
+                "mode": ws.mode or "reply",
                 "active": bool(ws.active),
                 "api_key": ws.api_key or "",
                 "base_url": (ws.base_url or "").rstrip("/"),
@@ -318,6 +329,7 @@ def get_workspace_config(name):
     return {
         "name": name,
         "platform": platform,
+        "mode": "reply",
         "active": True,
         "api_key": os.getenv(ws.get("api_key_env", ""), "") if ws.get("api_key_env") else "",
         "base_url": os.getenv("EMAILBISON_BASE_URL", "").rstrip("/"),
@@ -360,6 +372,7 @@ def save_workspace(ws_id, data):
 
         ws.name = data.get("name", ws.name).strip()
         ws.platform = data.get("platform", "bison")
+        ws.mode = data.get("mode", "reply")
         ws.active = bool(data.get("active", True))
         ws.api_key = data.get("api_key", "")
         ws.base_url = data.get("base_url", "")
