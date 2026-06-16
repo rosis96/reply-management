@@ -997,24 +997,53 @@ def update_instantly_lead(lead_id, ai_result, api_key):
         return response.text
 
 
+def find_instantly_lead(email, campaign_id, preferred_name=None):
+    """Find which Instantly account (workspace) owns this lead by trying each
+    active Instantly workspace's API key. Returns (workspace_config, lead_id)."""
+    candidates = []
+    seen = set()
+
+    if preferred_name:
+        pref = db.get_workspace_config(preferred_name)
+        if pref and pref.get("platform") == "instantly" and pref.get("api_key"):
+            candidates.append(pref)
+            seen.add(pref["name"])
+
+    try:
+        for w in db.list_workspaces():
+            if w.platform == "instantly" and w.active and w.name not in seen and (w.api_key or ""):
+                cfg = db.get_workspace_config(w.name)
+                if cfg and cfg.get("api_key"):
+                    candidates.append(cfg)
+                    seen.add(w.name)
+    except Exception as ex:
+        log(f"Failed to list Instantly workspaces: {ex}")
+
+    log(f"Trying {len(candidates)} Instantly workspace(s) to locate lead {email}...")
+
+    for cfg in candidates:
+        try:
+            lead_id = get_instantly_lead_id(
+                email=email,
+                campaign_id=campaign_id,
+                api_key=cfg["api_key"]
+            )
+        except Exception as ex:
+            log(f"Instantly lookup error in workspace {cfg['name']}: {ex}")
+            lead_id = None
+
+        if lead_id:
+            return cfg, lead_id
+
+    return None, None
+
+
 def process_instantly_reply(payload, workspace_name="Webaholics"):
     delay = get_reply_delay()
     log(f"Received Instantly job. Waiting {delay} seconds before replying.")
     time.sleep(delay)
     log("Processing Instantly reply webhook...")
     log(json.dumps(payload, indent=2))
-
-    workspace = db.get_workspace_config(workspace_name)
-
-    if not workspace:
-        log(f"Unknown Instantly workspace: {workspace_name}")
-        return
-
-    instantly_api_key = workspace.get("api_key")
-
-    if not instantly_api_key:
-        log(f"Missing Instantly API key for workspace {workspace_name}. Add it in the dashboard.")
-        return
 
     email = payload.get("lead_email", "") or payload.get("email", "")
     campaign_id = payload.get("campaign_id", "")
@@ -1026,15 +1055,30 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         log("Missing email or campaign_id in Instantly webhook.")
         return
 
-    lead_id = get_instantly_lead_id(
-        email=email,
-        campaign_id=campaign_id,
-        api_key=instantly_api_key
-    )
+    # Find the Instantly account that actually owns this lead (tries every
+    # active Instantly workspace's API key), so routing is automatic.
+    workspace, lead_id = find_instantly_lead(email, campaign_id, preferred_name=workspace_name)
 
-    if not lead_id:
-        log("No lead_id found in Instantly.")
+    if not workspace or not lead_id:
+        log("No Instantly lead found in ANY active Instantly workspace. "
+            "Make sure a workspace has the API key for the Instantly account that owns this campaign.")
+        record_lead(
+            platform="instantly",
+            workspace_name=workspace_name,
+            external_lead_id="",
+            reply_id="",
+            ai_result={"intent": "instantly_lead_not_found", "main_reply": ""},
+            action="error",
+            replied=False,
+            fup_added=False,
+            name=first_name,
+            email=email,
+        )
         return
+
+    workspace_name = workspace["name"]
+    instantly_api_key = workspace["api_key"]
+    log(f"Instantly lead matched in workspace: {workspace_name} (lead_id={lead_id})")
 
     thread = [
         {
