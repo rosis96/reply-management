@@ -215,16 +215,28 @@ label { display:block; color:var(--muted); font-size:12px; margin:13px 0 5px; fo
 
 SIDEBAR_ITEMS = [
     ("Dashboard", "/dashboard", "reply"),
-    ("Leads", "/dashboard", "reply"),
-    ("Campaigns", "/dashboard/soon?name=Campaigns", "soon"),
+    ("Leads", "/dashboard", "leads"),
+    ("Meeting Booked", "/dashboard?stage=booked", "booked"),
     ("Master Inbox", "/dashboard/soon?name=Master+Inbox", "soon"),
-    ("Sender Emails", "/dashboard/soon?name=Sender+Emails", "soon"),
-    ("Email Warmup", "/dashboard/soon?name=Email+Warmup", "soon"),
-    ("Sending Schedule", "/dashboard/soon?name=Sending+Schedule", "soon"),
-    ("Integrations", "/dashboard/soon?name=Integrations", "soon"),
     ("Settings", "/dashboard/settings", "settings"),
     ("Help & Support", "/dashboard/soon?name=Help+%26+Support", "soon"),
 ]
+
+STAGE_DEFS = [
+    ("new", "New"),
+    ("replied", "Replied"),
+    ("booked", "Meeting Booked"),
+    ("won", "Won"),
+    ("lost", "Lost"),
+    ("stopped", "Stopped"),
+]
+STAGE_LABELS = dict(STAGE_DEFS)
+
+
+def stage_badge(stage):
+    kind = {"booked": "ok", "won": "ok", "replied": "blue",
+            "new": "muted", "lost": "no", "stopped": "muted"}.get(stage, "muted")
+    return pill(STAGE_LABELS.get(stage, stage or "—"), kind)
 
 DRAWER_JS = """
 var LEAD_IDS = window.__LEAD_IDS__ || [];
@@ -249,12 +261,15 @@ function drawerNav(step){
 }
 function leadAction(id, action){
   var ta = document.getElementById('fup-edit');
+  var ss = document.getElementById('stage-sel');
   var fd = new FormData();
   fd.append('action', action);
   if(ta) fd.append('followup', ta.value);
+  if(ss) fd.append('stage', ss.value);
+  var reloaders = ['stop','mark_done','set_stage','mark_booked'];
   return fetch('/dashboard/leads/'+id+'/action', {method:'POST', body:fd})
     .then(function(r){return r.json();})
-    .then(function(d){ if(d && d.ok){ if(action==='stop'||action==='mark_done'){ location.reload(); } else { openDrawer(id); } } });
+    .then(function(d){ if(d && d.ok){ if(reloaders.indexOf(action)>-1){ location.reload(); } else { openDrawer(id); } } });
 }
 function wsFilter(q){q=q.toLowerCase();document.querySelectorAll('.ws-item').forEach(function(el){el.style.display=el.textContent.toLowerCase().indexOf(q)>-1?'block':'none';});}
 function toggleWs(ev){var m=document.getElementById('wsmenu');m.classList.toggle('open');ev.stopPropagation();}
@@ -307,7 +322,7 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 
     side = ""
     for label, href, key in SIDEBAR_ITEMS:
-        cls = "active" if key == active and label in ("Dashboard",) else ""
+        cls = "active" if key == active else ""
         side += f'<a class="{cls}" href="{href}">{e(label)}</a>'
 
     tabs = ""
@@ -389,7 +404,7 @@ def soon(request: Request, name: str = "This section", _: str = Depends(require_
 @router.get("/dashboard", response_class=HTMLResponse)
 def console(request: Request, workspace: str = "", status: str = "", intent: str = "",
             action: str = "", q: str = "", conf: str = "", date_from: str = "",
-            date_to: str = "", page: int = 1, _: str = Depends(require_login)):
+            date_to: str = "", stage: str = "", page: int = 1, _: str = Depends(require_login)):
     if not workspace:
         workspace = request.cookies.get("ws", "")
 
@@ -398,7 +413,7 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     rows, total = db.list_leads(
         workspace=workspace or None, status=status or None, intent=intent or None,
         action=action or None, search=q or None, conf_min=conf or None,
-        date_from=date_from or None, date_to=dto or None,
+        date_from=date_from or None, date_to=dto or None, stage=stage or None,
         offset=(page - 1) * PAGE_SIZE, limit=PAGE_SIZE,
     )
     counts = db.lead_counts(workspace=workspace or None)
@@ -418,6 +433,8 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     action_opts = "".join(f'<option value="{v}"{" selected" if v==action else ""}>{l}</option>' for v, l in action_defs)
     conf_defs = [("", "Any confidence"), ("0.5", "≥ 0.50"), ("0.7", "≥ 0.70"), ("0.9", "≥ 0.90")]
     conf_opts = "".join(f'<option value="{v}"{" selected" if v==conf else ""}>{l}</option>' for v, l in conf_defs)
+    stage_opts = '<option value="">All stages</option>' + "".join(
+        f'<option value="{v}"{" selected" if v==stage else ""}>{l}</option>' for v, l in STAGE_DEFS)
 
     # ---- rows ----
     body_rows = ""
@@ -433,6 +450,7 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
           <td class="small">{e(ld.campaign) or '<span class="muted">-</span>'}</td>
           <td>{e(ld.intent) or '<span class="muted">-</span>'}</td>
           <td>{e(ld.confidence)}</td>
+          <td>{stage_badge(ld.stage)}</td>
           <td>{action_badge(ld.action)}</td>
           <td>{reply_badge(ld)}</td>
           <td>{fup_badge(ld)}</td>
@@ -441,14 +459,14 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
         </tr>"""
 
     if not rows:
-        body_rows = ('<tr><td colspan="14"><div class="empty">No replies found.<br>'
+        body_rows = ('<tr><td colspan="15"><div class="empty">No replies found.<br>'
                      'Try changing filters or wait for new replies to sync.</div></td></tr>')
 
     # ---- pagination ----
     pages = max(1, math.ceil(total / PAGE_SIZE))
     base_params = {k: v for k, v in {
         "workspace": workspace, "status": status, "intent": intent, "action": action,
-        "q": q, "conf": conf, "date_from": date_from, "date_to": date_to}.items() if v}
+        "q": q, "conf": conf, "date_from": date_from, "date_to": date_to, "stage": stage}.items() if v}
 
     def page_url(p):
         params = dict(base_params); params["page"] = p
@@ -465,26 +483,30 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
 
     lead_ids = [ld.id for ld in rows]
 
-    def card(n, label, st=""):
-        href = page_url_filter(base_params, status=st)
+    def card(n, label, **override):
+        params = {k: v for k, v in base_params.items() if k not in ("status", "stage", "page")}
+        params.update({k: v for k, v in override.items() if v})
+        href = "/dashboard?" + urlencode(params)
         return f'<div class="stat click" onclick="location.href=\'{href}\'"><div class="n">{n}</div><div class="l">{label}</div></div>'
 
+    title = "Meeting Booked" if stage == "booked" else "Reply Manager"
     body = f"""
-    <h1>Reply Manager</h1>
-    <p class="sub">Process replies, review AI suggestions, and push follow-ups — all in one place.</p>
+    <h1>{e(title)}</h1>
+    <p class="sub">Process replies, review AI suggestions, push follow-ups, and track which leads book.</p>
 
     <div class="cards">
       {card(counts['total'], 'Total replies')}
-      {card(counts['replied'], 'Replied', 'replied')}
-      {card(counts['enriched'], 'Follow-ups added', 'enriched')}
-      {card(counts['needs_review'], 'Needs review', 'needs_review')}
-      {card(counts['stopped'], 'Stopped', 'stopped')}
-      {card(counts['sent'], 'Sent', 'replied')}
+      {card(counts['replied'], 'Replied', status='replied')}
+      {card(counts['booked'], 'Meeting Booked', stage='booked')}
+      {card(counts['needs_review'], 'Needs review', status='needs_review')}
+      {card(counts['enriched'], 'Follow-ups added', status='enriched')}
+      {card(counts['stopped'], 'Stopped', status='stopped')}
     </div>
 
     <form class="filterbar" id="filterform" method="get" action="/dashboard">
       <input class="grow" type="text" name="q" value="{e(q)}" placeholder="Search name, email or company..." oninput="autoApplySearch()">
       <select name="workspace" onchange="autoApply()">{ws_opts}</select>
+      <select name="stage" onchange="autoApply()">{stage_opts}</select>
       <select name="status" onchange="autoApply()">{status_opts}</select>
       <select name="intent" onchange="autoApply()">{intent_opts}</select>
       <select name="action" onchange="autoApply()">{action_opts}</select>
@@ -496,7 +518,8 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
 
     <div class="bulkbar" id="bulkbar">
       <b id="bulkcount">0 selected</b>
-      <button class="btn ok sm" onclick="bulkDo('mark_reviewed')">Mark reviewed</button>
+      <button class="btn ok sm" onclick="bulkDo('mark_booked')">Mark booked</button>
+      <button class="btn sec sm" onclick="bulkDo('mark_reviewed')">Mark reviewed</button>
       <button class="btn danger sm" onclick="bulkDo('stop')">Stop selected</button>
       <button class="btn sec sm" onclick="bulkDo('export')">Export CSV</button>
     </div>
@@ -506,7 +529,7 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
         <thead><tr>
           <th><input type="checkbox" onchange="toggleAll(this)"></th>
           <th>When</th><th>Workspace</th><th>Lead</th><th>Email</th><th>Company</th><th>Campaign</th>
-          <th>Intent</th><th>Conf</th><th>Action</th><th>Reply</th><th>FUP</th><th>Review</th><th></th>
+          <th>Intent</th><th>Conf</th><th>Stage</th><th>Action</th><th>Reply</th><th>FUP</th><th>Review</th><th></th>
         </tr></thead>
         <tbody>{body_rows}</tbody>
       </table>
@@ -518,7 +541,8 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
     </div>
     <script>window.__LEAD_IDS__ = {json.dumps(lead_ids)};</script>
     """
-    return HTMLResponse(layout("Reply Manager", "reply", body, current_ws=workspace, with_drawer=True))
+    active_key = "booked" if stage == "booked" else "reply"
+    return HTMLResponse(layout(title, active_key, body, current_ws=workspace, with_drawer=True))
 
 
 def page_url_filter(base_params, status=""):
@@ -559,6 +583,9 @@ def build_panel(ld):
 
     editable = followups[0] if followups else (ld.main_reply or "")
 
+    stage_sel = '<select id="stage-sel">' + "".join(
+        f'<option value="{v}"{" selected" if ld.stage==v else ""}>{l}</option>' for v, l in STAGE_DEFS) + "</select>"
+
     return f"""
     <div class="kv">
       <span class="tag">{e(ld.email)}</span>
@@ -570,7 +597,16 @@ def build_panel(ld):
     <div class="flex" style="margin-bottom:14px">
       <span>Intent: <b>{e(ld.intent) or '-'}</b></span>
       <span class="muted">conf {e(ld.confidence)}</span>
-      {action_badge(ld.action)} {reply_badge(ld)} {review_badge(ld)}
+      {stage_badge(ld.stage)} {action_badge(ld.action)} {reply_badge(ld)} {review_badge(ld)}
+    </div>
+
+    <div class="card">
+      <h3>Stage</h3>
+      <div class="flex">
+        {stage_sel}
+        <button class="btn sm" onclick="leadAction({ld.id},'set_stage')">Save stage</button>
+        <button class="btn ok sm" onclick="leadAction({ld.id},'mark_booked')">Mark booked</button>
+      </div>
     </div>
 
     <div class="card"><h3>Conversation</h3>{convo}</div>
@@ -629,9 +665,15 @@ async def lead_action(lead_id: int, request: Request, _: str = Depends(require_l
     elif action == "mark_reviewed":
         db.update_lead_fields(lead_id, reviewed=True)
     elif action == "stop":
-        db.update_lead_fields(lead_id, action="stop", reviewed=True)
+        db.update_lead_fields(lead_id, action="stop", stage="stopped", reviewed=True)
     elif action == "mark_done":
         db.update_lead_fields(lead_id, reviewed=True)
+    elif action == "mark_booked":
+        db.update_lead_fields(lead_id, stage="booked", reviewed=True)
+    elif action == "set_stage":
+        st = form.get("stage", "")
+        if st:
+            db.update_lead_fields(lead_id, stage=st)
 
     return JSONResponse({"ok": True})
 
@@ -645,25 +687,28 @@ async def bulk(request: Request, _: str = Depends(require_login)):
         if action == "mark_reviewed":
             db.bulk_update_leads(ids, reviewed=True)
         elif action == "stop":
-            db.bulk_update_leads(ids, action="stop", reviewed=True)
+            db.bulk_update_leads(ids, action="stop", stage="stopped", reviewed=True)
+        elif action == "mark_booked":
+            db.bulk_update_leads(ids, stage="booked", reviewed=True)
     return RedirectResponse("/dashboard", status_code=303)
 
 
 @router.get("/dashboard/export")
 def export_csv(request: Request, workspace: str = "", status: str = "", intent: str = "",
                action: str = "", q: str = "", conf: str = "", date_from: str = "",
-               date_to: str = "", ids: str = "", _: str = Depends(require_login)):
+               date_to: str = "", stage: str = "", ids: str = "", _: str = Depends(require_login)):
     id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()] if ids else None
     rows = db.export_leads(workspace=workspace or None, status=status or None, intent=intent or None,
                            action=action or None, search=q or None, conf_min=conf or None,
-                           date_from=date_from or None, date_to=date_to or None, ids=id_list)
+                           date_from=date_from or None, date_to=date_to or None,
+                           stage=stage or None, ids=id_list)
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Created", "Workspace", "Platform", "Name", "Email", "Company", "Campaign",
-                "Intent", "Confidence", "Action", "Replied", "FUP added", "Reviewed", "Reply text"])
+                "Intent", "Confidence", "Stage", "Action", "Replied", "FUP added", "Reviewed", "Reply text"])
     for ld in rows:
         w.writerow([ld.created_at, ld.workspace_name, ld.platform, ld.name, ld.email, ld.company,
-                    ld.campaign, ld.intent, ld.confidence, ld.action, ld.replied, ld.fup_added,
+                    ld.campaign, ld.intent, ld.confidence, ld.stage, ld.action, ld.replied, ld.fup_added,
                     ld.reviewed, (ld.reply_text or "").replace("\n", " ")])
     return Response(buf.getvalue(), media_type="text/csv",
                     headers={"Content-Disposition": "attachment; filename=replies.csv"})

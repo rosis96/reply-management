@@ -121,6 +121,7 @@ class Lead(Base):
     replied = Column(Boolean, default=False)               # reply was actually sent
     fup_added = Column(Boolean, default=False)             # follow-up variables written
     reviewed = Column(Boolean, default=False)              # a human has reviewed it
+    stage = Column(String(40), default="")                # workflow stage (new/replied/booked/won/lost/stopped)
     owner = Column(String(255), default="")               # assigned owner
 
     company = Column(String(255), default="")
@@ -162,6 +163,7 @@ def migrate():
         "thread": "TEXT",
         "conf_num": "FLOAT",
         "reviewed": "BOOLEAN",
+        "stage": "VARCHAR(40)",
     }
 
     with engine.begin() as conn:
@@ -419,7 +421,8 @@ def upsert_lead(
     session = SessionLocal()
     try:
         lead = session.query(Lead).filter(Lead.dedupe_key == dedupe_key).first()
-        if lead is None:
+        created = lead is None
+        if created:
             lead = Lead(dedupe_key=dedupe_key)
             session.add(lead)
 
@@ -445,6 +448,16 @@ def upsert_lead(
         lead.followups = json.dumps(followups or [])
         lead.thread = json.dumps(thread or [])
 
+        # Set a sensible default stage only on creation; never overwrite a
+        # stage a human has already set (e.g. "booked") when re-processing.
+        if created or not (lead.stage or ""):
+            if (action or "") == "stop":
+                lead.stage = "stopped"
+            elif (action or "") == "error":
+                lead.stage = "new"
+            else:
+                lead.stage = "replied"
+
         session.commit()
         return lead.id
     finally:
@@ -460,9 +473,11 @@ def get_lead(lead_id):
 
 
 def _apply_lead_filters(q, workspace=None, status=None, intent=None, action=None,
-                        search=None, conf_min=None, date_from=None, date_to=None):
+                        search=None, conf_min=None, date_from=None, date_to=None, stage=None):
     if workspace:
         q = q.filter(Lead.workspace_name == workspace)
+    if stage:
+        q = q.filter(Lead.stage == stage)
     if intent:
         q = q.filter(Lead.intent == intent)
     if action:
@@ -501,11 +516,11 @@ def _apply_lead_filters(q, workspace=None, status=None, intent=None, action=None
 
 
 def list_leads(workspace=None, status=None, intent=None, action=None, search=None,
-               conf_min=None, date_from=None, date_to=None, offset=0, limit=25):
+               conf_min=None, date_from=None, date_to=None, stage=None, offset=0, limit=25):
     session = SessionLocal()
     try:
         q = _apply_lead_filters(session.query(Lead), workspace, status, intent,
-                                action, search, conf_min, date_from, date_to)
+                                action, search, conf_min, date_from, date_to, stage)
         total = q.count()
         rows = q.order_by(Lead.created_at.desc()).offset(offset).limit(limit).all()
         return rows, total
@@ -514,7 +529,7 @@ def list_leads(workspace=None, status=None, intent=None, action=None, search=Non
 
 
 def export_leads(workspace=None, status=None, intent=None, action=None, search=None,
-                 conf_min=None, date_from=None, date_to=None, ids=None):
+                 conf_min=None, date_from=None, date_to=None, stage=None, ids=None):
     session = SessionLocal()
     try:
         q = session.query(Lead)
@@ -522,7 +537,7 @@ def export_leads(workspace=None, status=None, intent=None, action=None, search=N
             q = q.filter(Lead.id.in_(ids))
         else:
             q = _apply_lead_filters(q, workspace, status, intent, action,
-                                    search, conf_min, date_from, date_to)
+                                    search, conf_min, date_from, date_to, stage)
         return q.order_by(Lead.created_at.desc()).all()
     finally:
         session.close()
@@ -555,6 +570,8 @@ def lead_counts(workspace=None):
             Lead.action.in_(["skip_enrich", "error"]),
             (Lead.reviewed.is_(False)) | (Lead.reviewed.is_(None)),
         ))
+        booked = c(base.filter(Lead.stage == "booked"))
+        won = c(base.filter(Lead.stage == "won"))
         return {
             "total": total,
             "replied": replied,
@@ -562,6 +579,8 @@ def lead_counts(workspace=None):
             "enriched": enriched,
             "stopped": stopped,
             "needs_review": needs_review,
+            "booked": booked,
+            "won": won,
         }
     finally:
         session.close()
