@@ -131,6 +131,7 @@ class Lead(Base):
     main_reply = Column(Text, default="")                  # our AI reply
     followups = Column(Text, default="")                   # JSON list of follow-up drafts
     thread = Column(Text, default="")                      # JSON list of thread messages
+    lead_data = Column(Text, default="")                   # JSON of all lead fields from the platform
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -161,6 +162,7 @@ def migrate():
         "reply_text": "TEXT",
         "followups": "TEXT",
         "thread": "TEXT",
+        "lead_data": "TEXT",
         "conf_num": "FLOAT",
         "reviewed": "BOOLEAN",
         "stage": "VARCHAR(40)",
@@ -408,6 +410,7 @@ def upsert_lead(
     company="",
     followups=None,
     thread=None,
+    lead_data=None,
 ):
     external_lead_id = str(external_lead_id or "")
     reply_id = str(reply_id or "")
@@ -447,6 +450,8 @@ def upsert_lead(
         lead.company = company or ""
         lead.followups = json.dumps(followups or [])
         lead.thread = json.dumps(thread or [])
+        if lead_data is not None:
+            lead.lead_data = json.dumps(lead_data or {})
 
         # Set a sensible default stage only on creation; never overwrite a
         # stage a human has already set (e.g. "booked") when re-processing.

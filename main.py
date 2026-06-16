@@ -9,6 +9,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
 from fastapi import FastAPI, BackgroundTasks, Request
+from fastapi.responses import RedirectResponse
 
 import db
 from dashboard import router as dashboard_router
@@ -131,7 +132,8 @@ def decide_reply_action(ai_result):
 def record_lead(platform, workspace_name, external_lead_id, reply_id,
                 ai_result, action, replied, fup_added,
                 latest_reply=None, name="", email="",
-                reply_text="", subject="", campaign="", thread=None):
+                reply_text="", subject="", campaign="", thread=None,
+                company="", lead_data=None):
     """Write/update the lead row that powers the dashboard. Never raises."""
     try:
         if latest_reply:
@@ -149,6 +151,7 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
             workspace_name=workspace_name,
             name=name,
             email=email,
+            company=company,
             interested=(latest_reply.get("interested") if latest_reply else True),
             intent=ai_result.get("intent", ""),
             confidence=ai_result.get("confidence", ""),
@@ -162,9 +165,26 @@ def record_lead(platform, workspace_name, external_lead_id, reply_id,
             campaign=campaign,
             followups=followups,
             thread=thread or [],
+            lead_data=lead_data or {},
         )
     except Exception as ex:
         log(f"Failed to record lead in dashboard DB: {ex}")
+
+
+# Payload keys that aren't useful lead-profile data (operational/noisy/long).
+LEAD_DATA_EXCLUDE = {
+    "reply_html", "reply_text", "reply_text_snippet", "timestamp", "event_type",
+    "unibox_url", "campaign_id", "workspace", "step", "variant", "reply_subject",
+    "main_reply", "workspace_name",
+}
+
+
+def build_instantly_lead_data(payload, sender_email=""):
+    data = {k: v for k, v in payload.items()
+            if k not in LEAD_DATA_EXCLUDE and v not in (None, "")}
+    if sender_email:
+        data["Sending email"] = sender_email
+    return data
 
 
 def log(message):
@@ -1086,8 +1106,12 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     email = payload.get("lead_email", "") or payload.get("email", "")
     campaign_id = payload.get("campaign_id", "")
     first_name = payload.get("firstName", "")
+    last_name = payload.get("lastName", "")
+    full_name = (f"{first_name} {last_name}").strip() or first_name
+    company = payload.get("companyName", "") or payload.get("organization", "") or ""
     reply_text = payload.get("reply_text", "")
     subject = payload.get("reply_subject", "Re:")
+    lead_data = build_instantly_lead_data(payload)
 
     if not email or not campaign_id:
         log("Missing email or campaign_id in Instantly webhook.")
@@ -1109,8 +1133,10 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
             action="error",
             replied=False,
             fup_added=False,
-            name=first_name,
+            name=full_name,
             email=email,
+            company=company,
+            lead_data=lead_data,
         )
         return
 
@@ -1150,6 +1176,9 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
 
     website = workspace.get("website", "") or "https://www.webaholics.ai"
 
+    if sender_email:
+        lead_data["Sending email"] = sender_email
+
     log(f"Instantly sender_email: {sender_email}")
     log(f"Instantly sender_name: {sender_name}")
 
@@ -1180,12 +1209,14 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
             action=action,
             replied=False,
             fup_added=False,
-            name=first_name,
+            name=full_name,
             email=email,
+            company=company,
             reply_text=reply_text,
             subject=subject,
             campaign=payload.get("campaign_name", ""),
             thread=thread,
+            lead_data=lead_data,
         )
         return
 
@@ -1234,12 +1265,14 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         action=action,
         replied=bool(send_result),
         fup_added=bool(update_result),
-        name=first_name,
+        name=full_name,
         email=email,
+        company=company,
         reply_text=reply_text,
         subject=subject,
         campaign=payload.get("campaign_name", ""),
         thread=thread,
+        lead_data=lead_data,
     )
 
     final_log = {
@@ -1269,6 +1302,12 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
 # -------------------------
 
 @app.get("/")
+def root():
+    # Send visitors straight to the dashboard.
+    return RedirectResponse("/dashboard")
+
+
+@app.get("/healthz")
 def health_check():
     return {"status": "reply_management_running"}
 

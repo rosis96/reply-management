@@ -205,6 +205,20 @@ tbody tr:hover { background:#fafbff; }
 .fup .step { font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; margin-bottom:5px; }
 .kv { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:10px; }
 .kv .tag { background:var(--muted-soft); color:var(--muted); border-radius:8px; padding:3px 9px; font-size:12px; }
+/* lead-data rows */
+.ld-row { display:grid; grid-template-columns:150px 1fr; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); }
+.ld-row:last-child { border-bottom:none; }
+.ld-k { color:var(--muted); font-size:12px; font-weight:600; }
+.ld-v { font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+.ld-v.clamp { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; cursor:pointer; }
+.ld-v.clamp.open { -webkit-line-clamp:unset; }
+.ld-v a { word-break:break-all; }
+/* collapsible block */
+.clip { position:relative; max-height:140px; overflow:hidden; transition:max-height .2s ease; }
+.clip.open { max-height:4000px; }
+.clip-toggle { display:inline-block; margin-top:8px; color:var(--accent); font-weight:700; cursor:pointer; font-size:12px; }
+.clip-fade { position:absolute; bottom:0; left:0; right:0; height:38px; background:linear-gradient(transparent,#fff); pointer-events:none; }
+.clip.open .clip-fade { display:none; }
 .drawer .dfoot { margin-top:auto; padding:13px 18px; border-top:1px solid var(--line); display:flex; gap:8px; flex-wrap:wrap; }
 .row2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 label { display:block; color:var(--muted); font-size:12px; margin:13px 0 5px; font-weight:600; }
@@ -559,11 +573,56 @@ def page_url_filter(base_params, status=""):
 # Lead detail panel (drawer fragment) + full page fallback
 # -------------------------
 
+PRETTY_LABELS = {
+    "firstName": "First name", "lastName": "Last name", "jobTitle": "Job title",
+    "linkedIn": "LinkedIn", "lead_email": "Email", "email": "Email",
+    "companyName": "Company", "company_category": "Company category",
+    "ideal_customers": "Ideal customers", "campaign_name": "Campaign",
+    "Company Linkedin Url": "Company LinkedIn",
+}
+
+
+def prettify_key(k):
+    if k in PRETTY_LABELS:
+        return PRETTY_LABELS[k]
+    return k.replace("_", " ").strip().capitalize()
+
+
+# Show these lead-data fields first, in this order, when present.
+LEAD_DATA_PRIORITY = [
+    "firstName", "lastName", "jobTitle", "email", "lead_email", "Sending email",
+    "linkedIn", "website", "Industry", "company_category", "# Employees",
+    "Annual Revenue", "Company Address", "ideal_customers", "Company Linkedin Url",
+]
+
+
+def render_lead_data(data):
+    if not data:
+        return '<p class="muted">No lead data captured for this lead.</p>'
+
+    ordered = [k for k in LEAD_DATA_PRIORITY if k in data and data[k] not in (None, "")]
+    rest = [k for k in data if k not in LEAD_DATA_PRIORITY and data[k] not in (None, "")]
+    rows = ""
+    for k in ordered + rest:
+        v = str(data[k])
+        if k in ("linkedIn", "website", "Company Linkedin Url") and v.startswith("http"):
+            vhtml = f'<a href="{e(v)}" target="_blank" rel="noopener">{e(v)}</a>'
+            rows += f'<div class="ld-row"><div class="ld-k">{e(prettify_key(k))}</div><div class="ld-v">{vhtml}</div></div>'
+        else:
+            rows += (f'<div class="ld-row"><div class="ld-k">{e(prettify_key(k))}</div>'
+                     f'<div class="ld-v clamp" onclick="this.classList.toggle(\'open\')">{e(v)}</div></div>')
+    return rows
+
+
 def build_panel(ld):
     try:
         followups = json.loads(ld.followups) if ld.followups else []
     except Exception:
         followups = []
+    try:
+        data = json.loads(ld.lead_data) if ld.lead_data else {}
+    except Exception:
+        data = {}
 
     convo = ""
     if ld.reply_text:
@@ -609,8 +668,20 @@ def build_panel(ld):
       </div>
     </div>
 
-    <div class="card"><h3>Conversation</h3>{convo}</div>
-    <div class="card"><h3>Follow-up sequence (AI-drafted)</h3>{fups}</div>
+    <div class="card"><h3>Lead details</h3>{render_lead_data(data)}</div>
+
+    <div class="card">
+      <h3>Conversation</h3>
+      <div class="clip" id="convo-clip">{convo}<div class="clip-fade"></div></div>
+      <span class="clip-toggle" onclick="var c=document.getElementById('convo-clip');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'Show less':'Show full conversation';">Show full conversation</span>
+    </div>
+
+    <div class="card">
+      <h3>Follow-up sequence (AI-drafted)</h3>
+      <div class="clip" id="fup-clip">{fups}<div class="clip-fade"></div></div>
+      <span class="clip-toggle" onclick="var c=document.getElementById('fup-clip');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'Show less':'Show all follow-ups';">Show all follow-ups</span>
+    </div>
+
     <div class="card">
       <h3>Edit recommended follow-up</h3>
       <textarea id="fup-edit">{e(editable)}</textarea>
@@ -620,7 +691,6 @@ def build_panel(ld):
         <button class="btn danger sm" onclick="leadAction({ld.id},'stop')">Stop lead</button>
         <button class="btn sec sm" onclick="leadAction({ld.id},'mark_done')">Mark done</button>
       </div>
-      <p class="muted small" style="margin-top:8px">Saving updates the stored draft. (Live re-send from the dashboard is a planned next step.)</p>
     </div>
     """
 
