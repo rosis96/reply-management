@@ -1479,30 +1479,41 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
         data = payload.get("data") or {}
         tag_name = (data.get("tag_name") or "").strip()
         taggable_type = (data.get("taggable_type") or "").strip().lower()
-        trigger_tag = db.get_setting("followup_trigger_tag", "Begin follow-up").strip()
+        followup_tag = db.get_setting("followup_trigger_tag", "Begin follow-up").strip()
+        reply_tag = db.get_setting("reply_trigger_tag", "Interested").strip()
 
         if taggable_type != "lead":
             log(f"Tag '{tag_name}' attached to {taggable_type}, not a lead. Ignoring.")
             return {"success": True, "ignored": "not a lead"}
-        if tag_name.lower() != trigger_tag.lower():
-            log(f"Tag '{tag_name}' is not the follow-up trigger ('{trigger_tag}'). Ignoring.")
-            return {"success": True, "ignored": "tag not trigger"}
 
         lead_id = data.get("taggable_id")
         if not lead_id:
             return {"success": False, "error": "no taggable_id (lead id) in payload"}
-        if not workspace_name:
-            workspace_name = event.get("workspace_name") or "Insight Media Labs"
-
         try:
             lead_id = int(lead_id)
         except (TypeError, ValueError):
             pass
 
-        log(f"Follow-up trigger tag '{tag_name}' on lead {lead_id} -> workspace '{workspace_name}'")
-        background_tasks.add_task(process_reply, lead_id, workspace_name)
-        return {"success": True, "message": "Follow-up job accepted", "lead_id": lead_id,
-                "workspace_name": workspace_name}
+        default_ws = workspace_name or event.get("workspace_name") or "Insight Media Labs"
+        tn = tag_name.lower()
+
+        if tn == followup_tag.lower():
+            ws = qp.get("fup_workspace") or default_ws
+            log(f"Follow-up tag '{tag_name}' on lead {lead_id} -> workspace '{ws}'")
+            background_tasks.add_task(process_reply, lead_id, ws)
+            return {"success": True, "message": "Follow-up job accepted",
+                    "lead_id": lead_id, "workspace_name": ws}
+
+        if tn == reply_tag.lower():
+            ws = qp.get("reply_workspace") or default_ws
+            log(f"Reply tag '{tag_name}' on lead {lead_id} -> workspace '{ws}'")
+            background_tasks.add_task(process_reply, lead_id, ws)
+            return {"success": True, "message": "Reply job accepted",
+                    "lead_id": lead_id, "workspace_name": ws}
+
+        log(f"Tag '{tag_name}' is neither the reply trigger ('{reply_tag}') nor "
+            f"follow-up trigger ('{followup_tag}'). Ignoring.")
+        return {"success": True, "ignored": "tag not a trigger"}
 
     # ----- legacy Make.com shape: {lead_id, workspace_name} -----
     workspace_name = workspace_name or "Insight Media Labs"

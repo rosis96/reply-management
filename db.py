@@ -209,6 +209,7 @@ def seed_if_empty():
             "emailbison_base_url": os.getenv("EMAILBISON_BASE_URL", "").rstrip("/"),
             "reply_delay_seconds": os.getenv("REPLY_DELAY_SECONDS", "420"),
             "followup_trigger_tag": "Begin follow-up",
+            "reply_trigger_tag": "Interested",
         }
         for key, value in defaults.items():
             existing = session.get(Setting, key)

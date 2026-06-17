@@ -1311,8 +1311,10 @@ def settings_page(request: Request, saved: str = "", _: str = Depends(require_lo
           <div><label>Default EmailBison base URL</label><input type="text" name="emailbison_base_url" value="{e(s.get('emailbison_base_url',''))}" style="width:100%"></div>
           <div><label>Reply delay (seconds)</label><input type="text" name="reply_delay_seconds" value="{e(s.get('reply_delay_seconds','420'))}" style="width:100%"></div>
         </div>
-        <label>Follow-up trigger tag (Bison)</label>
-        <input type="text" name="followup_trigger_tag" value="{e(s.get('followup_trigger_tag','Begin follow-up'))}" style="width:100%">
+        <div class="row2">
+          <div><label>Follow-up trigger tag (Bison)</label><input type="text" name="followup_trigger_tag" value="{e(s.get('followup_trigger_tag','Begin follow-up'))}" style="width:100%"></div>
+          <div><label>Reply trigger tag (Bison)</label><input type="text" name="reply_trigger_tag" value="{e(s.get('reply_trigger_tag','Interested'))}" style="width:100%"></div>
+        </div>
       </div>
       <button class="btn" type="submit">Save settings</button>
     </form>
@@ -1325,6 +1327,6 @@ def settings_page(request: Request, saved: str = "", _: str = Depends(require_lo
 async def settings_save(request: Request, _: str = Depends(require_login)):
     form = await request.form()
     for key in ["openai_api_key", "human_review_webhook_url", "emailbison_base_url",
-                "reply_delay_seconds", "followup_trigger_tag"]:
+                "reply_delay_seconds", "followup_trigger_tag", "reply_trigger_tag"]:
         db.set_setting(key, form.get(key, ""))
     return RedirectResponse("/dashboard/settings?saved=1", status_code=303)
