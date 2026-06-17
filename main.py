@@ -1319,6 +1319,7 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     sender_email = (thread_eaccount
                     or extract_email_from_anything(payload.get("eaccount"))
                     or extract_email_from_anything(payload.get("from_email")))
+    sender_email = (sender_email or "").replace("mailto:", "").strip()
     sender_name = (extract_name_from_anything(payload.get("from"))
                    or sender_name_from_email(sender_email)
                    or "Team")
