@@ -1451,11 +1451,30 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
 
     event = payload.get("event") if isinstance(payload, dict) else None
 
-    # ----- EmailBison native TAG_ATTACHED webhook -----
+    # ----- EmailBison native webhooks (event + data) -----
     if isinstance(event, dict):
-        if event.get("type") != "TAG_ATTACHED":
-            log(f"Ignoring Bison event: {event.get('type')}")
-            return {"success": True, "ignored": event.get("type")}
+        etype = event.get("type")
+
+        # Interested / reply events -> normal reply flow (workspace decides mode).
+        if etype in BISON_REPLY_EVENTS:
+            lead_id = deep_find_lead_id(payload)
+            if not lead_id:
+                log(f"{etype}: no lead_id found in payload. Ignoring.")
+                return {"success": False, "error": "no lead_id"}
+            if not workspace_name:
+                workspace_name = event.get("workspace_name") or "Insight Media Labs"
+            try:
+                lead_id = int(lead_id)
+            except (TypeError, ValueError):
+                pass
+            log(f"Bison {etype} on lead {lead_id} -> workspace '{workspace_name}'")
+            background_tasks.add_task(process_reply, lead_id, workspace_name)
+            return {"success": True, "message": "Reply job accepted", "lead_id": lead_id,
+                    "workspace_name": workspace_name}
+
+        if etype != "TAG_ATTACHED":
+            log(f"Ignoring Bison event: {etype}")
+            return {"success": True, "ignored": etype}
 
         data = payload.get("data") or {}
         tag_name = (data.get("tag_name") or "").strip()
@@ -1506,6 +1525,33 @@ async def bison_reply_webhook(request: Request, background_tasks: BackgroundTask
         "workspace_name": workspace_name,
         "delay_seconds": get_reply_delay()
     }
+
+
+# EmailBison native event types that mean "the prospect replied / is interested"
+# and should run the normal reply flow.
+BISON_REPLY_EVENTS = {
+    "LEAD_INTERESTED", "CONTACT_INTERESTED", "CONTACT_REPLIED",
+    "REPLY_RECEIVED", "UNTRACKED_REPLY_RECEIVED",
+}
+
+
+def deep_find_lead_id(obj):
+    """Recursively look for a key literally named lead_id/leadId anywhere in the
+    payload (Bison nests it as data.reply.lead_id). Avoids grabbing a reply 'id'."""
+    if isinstance(obj, dict):
+        for k in ("lead_id", "leadId"):
+            if obj.get(k) not in (None, ""):
+                return obj.get(k)
+        for v in obj.values():
+            found = deep_find_lead_id(v)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = deep_find_lead_id(item)
+            if found is not None:
+                return found
+    return None
 
 
 def extract_bison_lead_id(payload):
