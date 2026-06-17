@@ -1,0 +1,119 @@
+{
+  "format_name": "Webaholics Simple Positive Reply + Follow-up Format",
+  "purpose": "Reply-mode format for the interested-reply workspace. main_reply is the immediate reply (auto-sent only for simple positive replies). followup_1 through followup_6 are loaded as campaign variables for the follow-up sequence.",
+  "mode": "reply",
+  "auto_send_policy": {
+    "auto_send_allowed_intents": ["simple_positive"],
+    "skip_auto_send_intents": [
+      "complex_positive", "pricing_question", "technical_question", "objection",
+      "case_study_request", "wrong_person", "unsubscribe", "out_of_office",
+      "not_interested", "unclear", "human_review_needed"
+    ],
+    "rule": "Only auto-send when the reply is a simple positive response. For anything complicated, do not send the main reply, still generate follow-up variables, and mark the lead for review."
+  },
+  "simple_positive_examples": [
+    "yes", "sure", "interested", "I am interested", "tell me more", "send more info",
+    "share more", "sounds good", "open to it", "happy to learn more", "I will listen",
+    "can you share details?"
+  ],
+  "main_reply": {
+    "intent": "simple_positive",
+    "word_count": "90-140 words",
+    "template": "Hey {{FirstName}},\n\nI'd love to walk you through how we can help {{desired outcome}} and {{secondary outcome}}.\n\nI'll also share what AI tools currently say about {{CompanyName}}, where competitors in your space may be gaining visibility, and a few opportunities we spotted to improve discovery, lead flow, and conversion.\n\nWould next week on {{Day}} at {{Time Option 1}}, {{Time Option 2}}, or {{Time Option 3}} work for a quick call? Let me know what works best and I'll send the invitation right away.\n\n{{Initials}}"
+  },
+  "followups": {
+    "followup_1": {
+      "label": "FUP 2",
+      "max_words": 110,
+      "template": "Hey {{FirstName}},\n\nWe were in a conversation recently but never got a chance to take it further.\n\nJust a bit more about us to grab your attention: {{pick ONE value point not used earlier in this thread and explain what we do in a personalized way, 40-50 words}}.\n\nI'd love to share more and lock in a time, ideally a quick call where I can walk you through what AI tools currently say about {{CompanyName}}, where competitors may be gaining visibility, and a few opportunities we see to improve buyer discovery.\n\nHere is my calendar: {{calendar_link}}\n\nFeel free to grab a time, or simply share yours."
+    },
+    "followup_2": {
+      "label": "FUP 3",
+      "max_words": 120,
+      "template": "Hey {{FirstName}},\n\nI've been following up to see if we can get a quick conversation.\n\nI realized we may need to share more: {{explain the process in detail, including services, outcomes, examples, and how everything works}}.\n\nWe help companies connect SEO, paid ads, landing pages, website conversion, CRM tracking, and AI automation into one system. I'd also love to walk you through {{what we will show them on the call}}.\n\nDoes next week on Monday or Tuesday at 11 AM, noon, or 1 PM work? Let me know and I'll send the invitation."
+    },
+    "followup_3": {
+      "label": "FUP 4",
+      "max_words": 120,
+      "template": "Hey {{FirstName}},\n\nThank you for your initial response and for engaging with us. Normally that tells me there may be a growth goal or visibility gap we can help with.\n\nAnd when we believe we can genuinely help, should we really disappear and leave the conversation there? Haha, just kidding.\n\nBut I'm trying to stay consistent and show you {{what we do and what we'd like to show you}}.\n\nHere is my availability next week:\nTuesday: {{time options}}\nWednesday: {{time options}}\nThursday: {{time options}}\n\nPlease let me know what works best and I'll send the invitation right away."
+    },
+    "followup_4": {
+      "label": "FUP 5",
+      "max_words": 90,
+      "template": "Hey {{FirstName}},\n\nWe were in a conversation and proposed a few times that worked on our end, but never received a confirmation. Those times are long gone.\n\nHere are some updated options so we can continue discussing what initially caught your interest around {{prospect-specific growth area}}.\n\nNext week:\n{{updated availability}}\n\nLet me know what works best."
+    },
+    "followup_5": {
+      "label": "FUP 6 (breakup)",
+      "max_words": 75,
+      "template": "{{FirstName}} —\n\nI've reached out a few times but haven't heard back, so I'm assuming improving visibility, lead flow, or customer acquisition with Webaholics is not something you're interested in exploring right now. Is that right?\n\nEither way, please let me know. Certainly don't want to be a pest."
+    },
+    "followup_6": {
+      "label": "FUP 7 (pain-point re-engagement)",
+      "max_words": 100,
+      "template": "Hi {{FirstName}},\n\nWe've heard from other {{persona}}s that {{common problem}}. Sound familiar?\n\nImagine improving {{problem or bottleneck}} by {{desired improvement}}. Others have been looking at Webaholics to {{desired outcome}} without {{common objection or tradeoff}}.\n\n{{short, relevant proof point}}\n\nMind if I share a bit more information?"
+    }
+  },
+  "placeholder_rules": {
+    "{{FirstName}}": "Use the prospect's first name if available. If unavailable, write 'there'.",
+    "{{CompanyName}}": "Use the prospect's company name if available. If unavailable, rewrite the line so it reads naturally without it.",
+    "{{desired outcome}}": "A specific outcome relevant to this prospect, e.g. increase qualified inquiries, improve buyer discovery, generate more estimate or consultation requests, improve app signups, strengthen customer acquisition, or improve visibility.",
+    "{{secondary outcome}}": "A second Webaholics outcome, e.g. connect SEO, paid ads, landing pages, and CRM into one system, reduce wasted ad spend, improve conversion flow, capture more inbound, or track what is actually driving results.",
+    "{{Day}}": "A working day at least 2 days after the reply. Avoid weekends.",
+    "{{Time Option 1}}": "A natural time, usually around 10 AM or 11 AM.",
+    "{{Time Option 2}}": "A natural time, usually around noon.",
+    "{{Time Option 3}}": "A natural time, usually early afternoon or 1 PM.",
+    "{{Initials}}": "Sender initials only, e.g. RS. Do not add Best, Regards, sender full name, or website here.",
+    "{{goal or problem we solve}}": "A specific outcome relevant to this prospect, e.g. improving buyer discovery, increasing qualified inquiries, generating more estimate requests, improving app signups, increasing seminar interest, improving project inquiry flow, improving visibility, or strengthening customer acquisition.",
+    "{{pick ONE value point...}}": "Choose one value point NOT used elsewhere in this sequence and explain it in 40-50 personalized words. Focus on Webaholics outcomes such as SEO visibility, PPC efficiency, landing page conversion, buyer discovery, CRM tracking, AI-powered follow-up, lead capture, or qualified inquiry growth.",
+    "{{explain the process in detail...}}": "Explain the process, services, outcomes, proof points, and how it works, tailored to this prospect. Focus on SEO, paid ads, landing pages, website conversion, lead tracking, AI automation, and revenue visibility.",
+    "{{what we will show them on the call}}": "Concrete items you'd show on the call, e.g. what AI tools currently say about their company, where competitors may be gaining visibility, where their website may be losing inquiries, and opportunities to improve discovery, lead generation, or conversion flow.",
+    "{{what we do and what we'd like to show you}}": "Explain simply how Webaholics helps more ideal customers discover and engage with their business, then mention the specific audit or opportunities to show.",
+    "{{prospect-specific growth area}}": "Use the relevant growth area from the thread, such as visibility, qualified inquiries, customer acquisition, app signups, project inquiries, estimate requests, consultation requests, seminar attendance, or buyer discovery.",
+    "{{time options}} and {{updated availability}}": "Weekday slots, 10 AM to 2 PM, at least 2 working days out. Keep each day on its own line.",
+    "{{persona}} / {{common problem}} / {{problem or bottleneck}} / {{desired improvement}} / {{desired outcome}} / {{common objection or tradeoff}} / {{short, relevant proof point}}": "Fill each with specific, personalized content based on the client profile and the prospect. Never leave a {{...}} placeholder in the final output.",
+    "calendar_link": "Always keep exactly: https://calendly.com/rosis/new-meeting"
+  },
+  "scheduling_rules": {
+    "minimum_notice": "Suggest times at least 2 working days after the prospect's last message.",
+    "working_days_only": true,
+    "avoid_weekends": true,
+    "preferred_time_window": "10 AM to 2 PM",
+    "proposal_style": "Suggest one day and natural time options, e.g. next week on Tuesday at 10 AM, noon, or 1 PM."
+  },
+  "content_rules": {
+    "focus_on": [
+      "qualified inquiries", "buyer discovery", "SEO visibility", "PPC efficiency",
+      "landing page conversion", "lead flow", "customer acquisition", "CRM tracking and follow-up",
+      "AI-powered automation"
+    ],
+    "may_reference": [
+      "what AI tools currently say about the company", "competitor visibility", "website conversion",
+      "retargeting", "lead capture", "qualified inquiry growth"
+    ],
+    "avoid": [
+      "AI search jargon (GEO, LLM optimization)",
+      "appointment-setting language",
+      "pipeline language that sounds like outbound sales",
+      "booked meeting language unless the prospect's own business relies on booked consultations",
+      "hype"
+    ]
+  },
+  "signature_rule": "main_reply may end with {{Initials}} only (the system also appends the sender name + website automatically, so keep this minimal or drop {{Initials}} to avoid a double signature). For follow-ups (followup_1 to followup_6) do NOT add a signature inside the variable; add it once in the campaign step template.",
+  "formatting_rules": {
+    "line_breaks": "Use one blank line (\\n\\n) between paragraphs. Keep day/time lists on their own lines with a single \\n.",
+    "no_em_dash": true,
+    "no_markdown": true,
+    "no_bullets_in_email": true,
+    "tone": "Warm, human, direct, persistent but not pushy. Continue the thread; never restart the pitch or repeat an earlier message.",
+    "avoid": [
+      "hype",
+      "robotic language",
+      "repeating the same angle twice",
+      "leaving any {{...}} placeholder unfilled",
+      "duplicate signatures",
+      "appointment-setting language",
+      "pipeline language that sounds like outbound sales",
+      "booked meeting language unless the prospect's own business relies on booked consultations"
+    ]
+  }
+}

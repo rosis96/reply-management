@@ -319,34 +319,41 @@ def extract_email_from_anything(value):
     return ""
 
 
-def extract_name_from_anything(value):
-    invalid_names = {"on", "from", "sent", "re", "fw", "fwd", "hey", "hello"}
+INVALID_NAMES = {"on", "from", "sent", "re", "fw", "fwd", "hey", "hello", "to", "cc", "subject", "date"}
 
+
+def _clean_name_token(name):
+    """Take the first token of a name and keep only its leading letters, so quoted
+    headers like 'From:' don't get treated as a name. Returns '' if invalid."""
+    first = (name or "").strip().strip('"').strip("'").split(" ")[0]
+    first = re.sub(r"[^A-Za-z].*$", "", first)  # cut at first non-letter (e.g. 'From:' -> 'From')
+    if not first:
+        return ""
+    titled = first.title()
+    return "" if titled.lower() in INVALID_NAMES else titled
+
+
+def extract_name_from_anything(value):
     if not value:
         return ""
 
     if isinstance(value, dict):
         name = value.get("name") or value.get("full_name") or value.get("sender_name")
         if name and isinstance(name, str):
-            clean_name = name.strip().split(" ")[0].title()
-            if clean_name.lower() not in invalid_names:
+            clean_name = _clean_name_token(name)
+            if clean_name:
                 return clean_name
-
-        email = extract_email_from_anything(value)
-        return sender_name_from_email(email)
+        return sender_name_from_email(extract_email_from_anything(value))
 
     value = str(value).strip()
 
     name_match = re.search(r"([^<>\n]+)<[\w\.-]+@[\w\.-]+\.\w+>", value)
     if name_match:
-        name = name_match.group(1).strip().strip('"').strip("'")
-        if name:
-            clean_name = name.split(" ")[0].title()
-            if clean_name.lower() not in invalid_names:
-                return clean_name
+        clean_name = _clean_name_token(name_match.group(1))
+        if clean_name:
+            return clean_name
 
-    email = extract_email_from_anything(value)
-    return sender_name_from_email(email)
+    return sender_name_from_email(extract_email_from_anything(value))
 
 
 def sender_name_from_email(email):
@@ -1100,18 +1107,55 @@ def get_latest_instantly_email_id(email, campaign_id, api_key):
     return uuid
 
 
-def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key):
+def build_reply_quote(payload):
+    """Build a Gmail-style quoted block of the prospect's reply, so our reply
+    reads like a natural thread instead of a standalone email."""
+    reply_html = payload.get("reply_html") or ""
+    reply_text = payload.get("reply_text") or ""
+    if not reply_html and not reply_text:
+        return "", ""
+
+    name = (f"{payload.get('firstName','')} {payload.get('lastName','')}").strip() \
+        or payload.get("firstName", "") or "they"
+    email = payload.get("lead_email", "") or payload.get("email", "")
+    ts = payload.get("timestamp", "")
+    when = ""
+    try:
+        from datetime import datetime as _dt
+        when = _dt.fromisoformat(ts.replace("Z", "+00:00")).strftime("%a, %b %d, %Y at %I:%M %p")
+    except Exception:
+        when = ts
+
+    attr = f"On {when}, {name} <{email}> wrote:" if when else f"{name} <{email}> wrote:"
+
+    quote_html = (f'<br><br><div class="gmail_quote">'
+                  f'<div dir="ltr">{e_html(attr)}</div>'
+                  f'<blockquote class="gmail_quote" style="margin:0 0 0 .8ex;'
+                  f'border-left:1px solid #ccc;padding-left:1ex">'
+                  f'{reply_html or e_html(reply_text).replace(chr(10), "<br>")}</blockquote></div>')
+
+    quote_text = "\n\n" + attr + "\n" + "\n".join("> " + ln for ln in reply_text.splitlines())
+    return quote_html, quote_text
+
+
+def e_html(s):
+    return (str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def send_instantly_reply(reply_to_uuid, message, eaccount, subject, api_key, quote_html="", quote_text=""):
     url = "https://api.instantly.ai/api/v2/emails/reply"
 
     message = normalize_email_spacing(message)
+    html = message.replace("\n", "<br>") + (quote_html or "")
+    text = message + (quote_text or "")
 
     payload = {
         "reply_to_uuid": reply_to_uuid,
         "eaccount": eaccount,
         "subject": subject,
         "body": {
-            "text": message,
-            "html": message.replace("\n", "<br>")
+            "text": text,
+            "html": html
         }
     }
 
@@ -1250,6 +1294,11 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     instantly_api_key = workspace["api_key"]
     log(f"Instantly lead matched in workspace: {workspace_name} (lead_id={lead_id})")
 
+    # Resolve the prospect's inbound email up front. It gives us BOTH the right
+    # reply target and the sending account (the mailbox that received the reply),
+    # which is the reliable source for the sender name/email.
+    reply_to_uuid, thread_eaccount = find_instantly_reply_target(email, campaign_id, instantly_api_key)
+
     thread = [
         {
             "type": "reply",
@@ -1265,21 +1314,14 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     log(f"Generating Instantly AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode)
 
-    sender_email = extract_email_from_anything(payload.get("eaccount"))
-    if not sender_email:
-        sender_email = extract_email_from_anything(payload.get("from_email"))
-    if not sender_email:
-        sender_email = extract_email_from_anything(reply_text)
-
-    sender_name = extract_name_from_anything(payload.get("eaccount"))
-    if not sender_name:
-        sender_name = extract_name_from_anything(payload.get("from"))
-    if not sender_name:
-        sender_name = extract_name_from_anything(reply_text)
-    if not sender_name:
-        sender_name = sender_name_from_email(sender_email)
-    if not sender_name:
-        sender_name = "Team"
+    # Sender = the account that received the prospect's reply. Do NOT parse the
+    # prospect's reply text for this (that grabs the prospect / quoted headers).
+    sender_email = (thread_eaccount
+                    or extract_email_from_anything(payload.get("eaccount"))
+                    or extract_email_from_anything(payload.get("from_email")))
+    sender_name = (extract_name_from_anything(payload.get("from"))
+                   or sender_name_from_email(sender_email)
+                   or "Team")
 
     website = workspace.get("website", "") or "https://www.webaholics.ai"
 
@@ -1331,12 +1373,7 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     eaccount = sender_email  # default; refined below from the inbound email
 
     if action == "send":
-        reply_to_uuid, thread_eaccount = find_instantly_reply_target(
-            email=email,
-            campaign_id=campaign_id,
-            api_key=instantly_api_key
-        )
-        # Prefer the account that actually received the prospect's reply.
+        # reply_to_uuid + thread_eaccount were resolved earlier.
         eaccount = thread_eaccount or sender_email
         log(f"Instantly reply target uuid={reply_to_uuid}, eaccount={eaccount}")
 
@@ -1345,12 +1382,15 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
                 log("No sending account found. Skipping reply send to avoid wrong sender.")
             else:
                 log("Sending Instantly reply to the prospect's inbound email...")
+                quote_html, quote_text = build_reply_quote(payload)
                 send_result = send_instantly_reply(
                     reply_to_uuid=reply_to_uuid,
                     message=ai_result.get("main_reply", ""),
                     eaccount=eaccount,
                     subject=subject,
-                    api_key=instantly_api_key
+                    api_key=instantly_api_key,
+                    quote_html=quote_html,
+                    quote_text=quote_text,
                 )
                 log(f"Instantly send result: {send_result}")
         else:
