@@ -141,6 +141,19 @@ class Lead(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ProposedSlot(Base):
+    """One row per real Calendly time we've already proposed to a prospect, so
+    we never pitch the same upcoming slot to two different prospects."""
+    __tablename__ = "proposed_slots"
+
+    id = Column(Integer, primary_key=True)
+    workspace_name = Column(String(255), default="", index=True)
+    prospect = Column(String(255), default="")             # email or lead id
+    slot_utc = Column(String(40), default="", index=True)  # ISO 8601 UTC, the unique key
+    label = Column(Text, default="")                       # human label we showed
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # -------------------------
 # Init + seed
 # -------------------------
@@ -413,6 +426,64 @@ def delete_workspace(ws_id):
         if ws is not None:
             session.delete(ws)
             session.commit()
+    finally:
+        session.close()
+
+
+# -------------------------
+# Proposed-slot reservation (avoid pitching the same time twice)
+# -------------------------
+
+def get_reserved_slot_keys(workspace_name, now_iso):
+    """Return the set of slot_utc keys already proposed for this workspace that
+    are still in the future (past slots are irrelevant). Also prunes old rows."""
+    session = SessionLocal()
+    try:
+        # prune rows whose slot time has already passed
+        try:
+            session.query(ProposedSlot).filter(
+                ProposedSlot.workspace_name == workspace_name,
+                ProposedSlot.slot_utc < now_iso,
+            ).delete(synchronize_session=False)
+            session.commit()
+        except Exception:
+            session.rollback()
+
+        rows = session.query(ProposedSlot.slot_utc).filter(
+            ProposedSlot.workspace_name == workspace_name,
+            ProposedSlot.slot_utc >= now_iso,
+        ).all()
+        return {r[0] for r in rows if r[0]}
+    finally:
+        session.close()
+
+
+def reserve_slots(workspace_name, prospect, items):
+    """Record that we proposed these slots. `items` is a list of
+    {"utc": iso, "label": str}. Skips any slot already reserved (idempotent)."""
+    if not items:
+        return
+    session = SessionLocal()
+    try:
+        existing = {
+            r[0] for r in session.query(ProposedSlot.slot_utc).filter(
+                ProposedSlot.workspace_name == workspace_name,
+            ).all()
+        }
+        for it in items:
+            utc = (it or {}).get("utc", "")
+            if not utc or utc in existing:
+                continue
+            session.add(ProposedSlot(
+                workspace_name=workspace_name,
+                prospect=str(prospect or "")[:255],
+                slot_utc=utc,
+                label=(it or {}).get("label", ""),
+            ))
+            existing.add(utc)
+        session.commit()
+    except Exception:
+        session.rollback()
     finally:
         session.close()
 

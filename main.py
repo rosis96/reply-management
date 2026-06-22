@@ -560,12 +560,15 @@ def resolve_calendly_event_type(token, scheduling_url=""):
 
 
 def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
-                       window_start=10, window_end=14, min_days=2):
-    """Return up to `count` real open slots, in the prospect's timezone, spread
-    across different days, formatted like 'Tuesday, Jun 23 at 11:00 AM PDT'."""
+                       window_start=10, window_end=14, min_days=2, exclude=None):
+    """Return up to `count` real open slots as dicts {"utc": iso, "label": str},
+    in the prospect's timezone, spread across different days. `exclude` is a set
+    of UTC-ISO keys already proposed to other prospects (skipped here)."""
     from datetime import datetime, timedelta, timezone as _utc
     from zoneinfo import ZoneInfo
     import random
+
+    exclude = exclude or set()
 
     event_type_uri, _ = resolve_calendly_event_type(token, scheduling_url)
     if not event_type_uri:
@@ -593,52 +596,100 @@ def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
     except Exception:
         ptz = ZoneInfo("America/New_York")
 
-    def parse(s):
+    def norm_utc(s):
+        # canonical UTC ISO key, e.g. 2026-06-23T18:00:00Z
         try:
-            return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(ptz)
+            return (datetime.fromisoformat(s.replace("Z", "+00:00"))
+                    .astimezone(_utc.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         except Exception:
             return None
 
-    slots = [parse(s.get("start_time")) for s in r.json().get("collection", [])]
-    slots = [s for s in slots if s and s.weekday() < 5]
+    rows = []  # (local_dt, utc_key)
+    for s in r.json().get("collection", []):
+        raw = s.get("start_time")
+        if not raw:
+            continue
+        key = norm_utc(raw)
+        if not key or key in exclude:
+            continue
+        try:
+            local = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(ptz)
+        except Exception:
+            continue
+        if local.weekday() >= 5:
+            continue
+        rows.append((local, key))
 
-    primary = [s for s in slots if window_start <= s.hour < window_end]
-    pool = primary or [s for s in slots if 9 <= s.hour < 17] or slots
+    primary = [r for r in rows if window_start <= r[0].hour < window_end]
+    pool = primary or [r for r in rows if 9 <= r[0].hour < 17] or rows
     if not pool:
         return []
 
     by_day = {}
-    for s in pool:
-        by_day.setdefault(s.date(), []).append(s)
+    for local, key in pool:
+        by_day.setdefault(local.date(), []).append((local, key))
     days = list(by_day.keys())
-    random.shuffle(days)  # spread across prospects so they don't all get the same slot
+    random.shuffle(days)  # extra spread across prospects
 
     chosen = [random.choice(by_day[d]) for d in days[:count]]
-    chosen.sort()
-    return [c.strftime("%A, %b %d at %-I:%M %p %Z") for c in chosen]
+    chosen.sort(key=lambda x: x[0])
+    return [{"utc": key, "label": local.strftime("%A, %b %d at %-I:%M %p %Z")}
+            for local, key in chosen]
 
 
-def build_scheduling_context(workspace, location):
+def build_scheduling_context(workspace, location, prospect_key="", mode="reply"):
     """Build a prompt block of real open Calendly times in the prospect's
-    timezone. Returns '' when no token / no slots (AI falls back to generic)."""
+    timezone, EXCLUDING times already proposed to other prospects, and RESERVE
+    the ones we pick so no other prospect gets them. Returns '' when no token /
+    no slots (the AI then falls back to generic scheduling language)."""
     token = (workspace or {}).get("calendly_token", "")
     if not token:
         return ""
     sched_url = workspace.get("calendly_scheduling_url", "")
+    ws_name = workspace.get("name", "")
     prospect_tz = timezone_from_location(location)
+
+    # Follow-up sequences propose times in several messages, so they need more
+    # distinct real slots than a single reply.
+    want = 6 if mode == "followup" else 3
+
+    from datetime import datetime, timezone as _utc
+    now_iso = datetime.now(_utc.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        slots = get_calendly_slots(token, sched_url, prospect_tz, count=3)
+        reserved = db.get_reserved_slot_keys(ws_name, now_iso)
+    except Exception as ex:
+        log(f"Calendly reserved-slot lookup failed: {ex}")
+        reserved = set()
+
+    try:
+        slots = get_calendly_slots(token, sched_url, prospect_tz, count=want, exclude=reserved)
+        if not slots:
+            # Everything is reserved or nothing fits; fall back to the open pool
+            # so we still propose real times rather than nothing.
+            slots = get_calendly_slots(token, sched_url, prospect_tz, count=want)
     except Exception as ex:
         log(f"Calendly scheduling context failed: {ex}")
         return ""
     if not slots:
         return ""
+
+    # Reserve these so the next prospect won't be offered the same times.
+    try:
+        db.reserve_slots(ws_name, prospect_key, slots)
+    except Exception as ex:
+        log(f"Calendly reserve_slots failed: {ex}")
+
     tzname = prospect_tz.split("/")[-1].replace("_", " ")
-    lines = "\n".join(f"- {s}" for s in slots)
+    lines = "\n".join(f"- {s['label']}" for s in slots)
     link = sched_url or ""
+    extra = ""
+    if mode == "followup":
+        extra = ("\nThese are the ONLY real open times. When a follow-up proposes a meeting, "
+                 "use a DIFFERENT one of these times in each message (do not repeat the same "
+                 "time across follow-ups), and never invent times not listed here.")
     return (f"The prospect appears to be in {tzname} time. Propose ONLY these real, "
             f"currently-open times from the client's calendar, exactly as written (already "
-            f"in the prospect's timezone). Do NOT invent any other times:\n{lines}\n"
+            f"in the prospect's timezone). Do NOT invent any other times:\n{lines}{extra}\n"
             + (f"Always include this booking link so they can confirm: {link}" if link else ""))
 
 
@@ -1141,7 +1192,9 @@ def process_reply(lead_id, workspace_name):
     if workspace.get("calendly_token"):
         prospect_location = fetch_bison_lead_location(lead_id, workspace_bison_api_key, base_url)
         log(f"Calendly: prospect location guess = '{prospect_location}'")
-        scheduling_context = build_scheduling_context(workspace, prospect_location)
+        scheduling_context = build_scheduling_context(
+            workspace, prospect_location,
+            prospect_key=str(lead_id), mode=mode)
         if scheduling_context:
             log("Calendly: injected real open times into the prompt.")
 
@@ -1547,7 +1600,9 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     if workspace.get("calendly_token"):
         prospect_location = extract_location_from_data(lead_data)
         log(f"Calendly: prospect location guess = '{prospect_location}'")
-        scheduling_context = build_scheduling_context(workspace, prospect_location)
+        scheduling_context = build_scheduling_context(
+            workspace, prospect_location,
+            prospect_key=(email or str(lead_id)), mode=mode)
         if scheduling_context:
             log("Calendly: injected real open times into the prompt.")
 
