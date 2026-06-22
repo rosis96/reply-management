@@ -1216,6 +1216,10 @@ def _workspace_form(ws=None, error="", current_ws=""):
           <div><label>Default sender name</label><input type="text" name="sender_name" value="{e(g('sender_name'))}" style="width:100%"></div>
         </div>
         <label>Default sender email</label><input type="text" name="default_sender_email" value="{e(g('default_sender_email'))}" style="width:100%">
+        <div class="row2">
+          <div><label>Calendly Personal Access Token</label><input type="text" name="calendly_token" value="{e(g('calendly_token'))}" placeholder="optional — enables real availability" style="width:100%"></div>
+          <div><label>Calendly scheduling link</label><input type="text" name="calendly_scheduling_url" value="{e(g('calendly_scheduling_url'))}" placeholder="https://calendly.com/rosis/new-meeting" style="width:100%"></div>
+        </div>
         <label class="flex"><input type="checkbox" name="active" value="1" {active_checked} style="margin-right:8px"> Active</label>
       </div>
       <div class="card"><h3>Client profile (JSON)</h3><textarea name="client_profile">{e(profile)}</textarea></div>
@@ -1258,6 +1262,8 @@ async def _read_workspace_form(request: Request):
         "reply_followup_campaign_id": form.get("reply_followup_campaign_id", ""),
         "website": form.get("website", ""), "sender_name": form.get("sender_name", ""),
         "default_sender_email": form.get("default_sender_email", ""),
+        "calendly_token": form.get("calendly_token", ""),
+        "calendly_scheduling_url": form.get("calendly_scheduling_url", ""),
         "active": form.get("active") == "1",
         "client_profile": _parse_json_field(form.get("client_profile"), "Client profile"),
         "reply_format": _parse_json_field(form.get("reply_format"), "Reply format"),

@@ -472,6 +472,225 @@ def add_signature(message, sender_name, website):
     return message
 
 
+# ============================================================
+# Calendly scheduling (real availability, prospect-timezone aware)
+# ============================================================
+
+US_STATE_TZ = {
+    "alabama": "America/Chicago", "alaska": "America/Anchorage", "arizona": "America/Phoenix",
+    "arkansas": "America/Chicago", "california": "America/Los_Angeles", "colorado": "America/Denver",
+    "connecticut": "America/New_York", "delaware": "America/New_York", "florida": "America/New_York",
+    "georgia": "America/New_York", "hawaii": "Pacific/Honolulu", "idaho": "America/Denver",
+    "illinois": "America/Chicago", "indiana": "America/Indiana/Indianapolis", "iowa": "America/Chicago",
+    "kansas": "America/Chicago", "kentucky": "America/New_York", "louisiana": "America/Chicago",
+    "maine": "America/New_York", "maryland": "America/New_York", "massachusetts": "America/New_York",
+    "michigan": "America/New_York", "minnesota": "America/Chicago", "mississippi": "America/Chicago",
+    "missouri": "America/Chicago", "montana": "America/Denver", "nebraska": "America/Chicago",
+    "nevada": "America/Los_Angeles", "new hampshire": "America/New_York", "new jersey": "America/New_York",
+    "new mexico": "America/Denver", "new york": "America/New_York", "north carolina": "America/New_York",
+    "north dakota": "America/Chicago", "ohio": "America/New_York", "oklahoma": "America/Chicago",
+    "oregon": "America/Los_Angeles", "pennsylvania": "America/New_York", "rhode island": "America/New_York",
+    "south carolina": "America/New_York", "south dakota": "America/Chicago", "tennessee": "America/Chicago",
+    "texas": "America/Chicago", "utah": "America/Denver", "vermont": "America/New_York",
+    "virginia": "America/New_York", "washington": "America/Los_Angeles", "west virginia": "America/New_York",
+    "wisconsin": "America/Chicago", "wyoming": "America/Denver", "district of columbia": "America/New_York",
+}
+
+COUNTRY_TZ = {
+    "united states": "America/New_York", "usa": "America/New_York", "canada": "America/Toronto",
+    "united kingdom": "Europe/London", "england": "Europe/London", "scotland": "Europe/London",
+    "ireland": "Europe/Dublin", "france": "Europe/Paris", "germany": "Europe/Berlin",
+    "spain": "Europe/Madrid", "italy": "Europe/Rome", "netherlands": "Europe/Amsterdam",
+    "india": "Asia/Kolkata", "australia": "Australia/Sydney", "singapore": "Asia/Singapore",
+    "united arab emirates": "Asia/Dubai", "new zealand": "Pacific/Auckland",
+    "brazil": "America/Sao_Paulo", "mexico": "America/Mexico_City", "south africa": "Africa/Johannesburg",
+    "japan": "Asia/Tokyo", "philippines": "Asia/Manila",
+}
+
+
+def timezone_from_location(location, default="America/New_York"):
+    loc = (location or "").lower()
+    if not loc:
+        return default
+    for state, tz in US_STATE_TZ.items():
+        if state in loc:
+            return tz
+    for country, tz in COUNTRY_TZ.items():
+        if country in loc:
+            return tz
+    return default
+
+
+def _calendly_headers(token):
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def resolve_calendly_event_type(token, scheduling_url=""):
+    """Return (event_type_uri, user_timezone) for the client's Calendly."""
+    try:
+        r = requests.get("https://api.calendly.com/users/me", headers=_calendly_headers(token), timeout=15)
+        if r.status_code != 200:
+            log(f"Calendly /users/me failed: {r.status_code} {r.text[:160]}")
+            return None, None
+        user = r.json().get("resource", {})
+        user_uri = user.get("uri")
+        user_tz = user.get("timezone")
+
+        r2 = requests.get("https://api.calendly.com/event_types", headers=_calendly_headers(token),
+                          params={"user": user_uri, "active": "true", "count": 100}, timeout=15)
+        if r2.status_code != 200:
+            log(f"Calendly event_types failed: {r2.status_code}")
+            return None, user_tz
+        items = r2.json().get("collection", [])
+        if not items:
+            return None, user_tz
+
+        slug = (scheduling_url or "").rstrip("/").split("/")[-1].lower() if scheduling_url else ""
+        chosen = None
+        if slug:
+            for it in items:
+                if slug and slug in (it.get("scheduling_url", "") or "").lower():
+                    chosen = it
+                    break
+        chosen = chosen or items[0]
+        return chosen.get("uri"), user_tz
+    except Exception as ex:
+        log(f"Calendly resolve error: {ex}")
+        return None, None
+
+
+def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
+                       window_start=10, window_end=14, min_days=2):
+    """Return up to `count` real open slots, in the prospect's timezone, spread
+    across different days, formatted like 'Tuesday, Jun 23 at 11:00 AM PDT'."""
+    from datetime import datetime, timedelta, timezone as _utc
+    from zoneinfo import ZoneInfo
+    import random
+
+    event_type_uri, _ = resolve_calendly_event_type(token, scheduling_url)
+    if not event_type_uri:
+        return []
+
+    start = datetime.now(_utc.utc) + timedelta(days=min_days)
+    end = start + timedelta(days=7)  # Calendly allows max 7-day window
+    params = {
+        "event_type": event_type_uri,
+        "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "end_time": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    try:
+        r = requests.get("https://api.calendly.com/event_type_available_times",
+                         headers=_calendly_headers(token), params=params, timeout=20)
+    except Exception as ex:
+        log(f"Calendly available_times error: {ex}")
+        return []
+    if r.status_code != 200:
+        log(f"Calendly available_times failed: {r.status_code} {r.text[:160]}")
+        return []
+
+    try:
+        ptz = ZoneInfo(prospect_tz)
+    except Exception:
+        ptz = ZoneInfo("America/New_York")
+
+    def parse(s):
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(ptz)
+        except Exception:
+            return None
+
+    slots = [parse(s.get("start_time")) for s in r.json().get("collection", [])]
+    slots = [s for s in slots if s and s.weekday() < 5]
+
+    primary = [s for s in slots if window_start <= s.hour < window_end]
+    pool = primary or [s for s in slots if 9 <= s.hour < 17] or slots
+    if not pool:
+        return []
+
+    by_day = {}
+    for s in pool:
+        by_day.setdefault(s.date(), []).append(s)
+    days = list(by_day.keys())
+    random.shuffle(days)  # spread across prospects so they don't all get the same slot
+
+    chosen = [random.choice(by_day[d]) for d in days[:count]]
+    chosen.sort()
+    return [c.strftime("%A, %b %d at %-I:%M %p %Z") for c in chosen]
+
+
+def build_scheduling_context(workspace, location):
+    """Build a prompt block of real open Calendly times in the prospect's
+    timezone. Returns '' when no token / no slots (AI falls back to generic)."""
+    token = (workspace or {}).get("calendly_token", "")
+    if not token:
+        return ""
+    sched_url = workspace.get("calendly_scheduling_url", "")
+    prospect_tz = timezone_from_location(location)
+    try:
+        slots = get_calendly_slots(token, sched_url, prospect_tz, count=3)
+    except Exception as ex:
+        log(f"Calendly scheduling context failed: {ex}")
+        return ""
+    if not slots:
+        return ""
+    tzname = prospect_tz.split("/")[-1].replace("_", " ")
+    lines = "\n".join(f"- {s}" for s in slots)
+    link = sched_url or ""
+    return (f"The prospect appears to be in {tzname} time. Propose ONLY these real, "
+            f"currently-open times from the client's calendar, exactly as written (already "
+            f"in the prospect's timezone). Do NOT invent any other times:\n{lines}\n"
+            + (f"Always include this booking link so they can confirm: {link}" if link else ""))
+
+
+# Keys we look at (in order) to figure out where a prospect is located.
+LOCATION_KEYS = [
+    "location", "Location", "prospect_location", "timezone", "time_zone", "tz",
+    "city", "City", "state", "State", "region", "Region",
+    "country", "Country", "country_name", "address", "Address",
+]
+
+
+def extract_location_from_data(data):
+    """Pull a best-guess location string from a lead/custom-variable dict."""
+    if not isinstance(data, dict):
+        return ""
+    parts = []
+    for k in LOCATION_KEYS:
+        v = data.get(k)
+        if isinstance(v, str) and v.strip():
+            parts.append(v.strip())
+    # de-dup while preserving order
+    seen, out = set(), []
+    for p in parts:
+        if p.lower() not in seen:
+            seen.add(p.lower())
+            out.append(p)
+    return ", ".join(out)
+
+
+def fetch_bison_lead_location(lead_id, api_key, base_url):
+    """Best-effort: GET the Bison lead and extract a location string from its
+    fields + custom variables. Returns '' on any failure (graceful)."""
+    try:
+        r = requests.get(f"{base_url}/api/leads/{lead_id}",
+                         headers=bison_headers(api_key), timeout=15)
+        if r.status_code not in (200, 201):
+            return ""
+        lead = r.json().get("data", r.json())
+        flat = dict(lead) if isinstance(lead, dict) else {}
+        cv = flat.get("custom_variables")
+        if isinstance(cv, dict):
+            flat = {**flat, **cv}
+        elif isinstance(cv, list):
+            for item in cv:
+                if isinstance(item, dict) and "name" in item:
+                    flat[item["name"]] = item.get("value", "")
+        return extract_location_from_data(flat)
+    except Exception as ex:
+        log(f"Bison lead location fetch failed: {ex}")
+        return ""
+
+
 FOLLOWUP_SYSTEM = (
     "You write outbound sales FOLLOW-UPS that continue an existing email thread to re-engage a "
     "quiet prospect and book a meeting. Return only valid JSON. No markdown. Never add sign-offs, "
@@ -481,7 +700,8 @@ FOLLOWUP_SYSTEM = (
 )
 
 
-def _followup_prompt(client_profile, reply_format, thread):
+def _followup_prompt(client_profile, reply_format, thread, scheduling_context=""):
+    sched = f"\nLIVE SCHEDULING (use these REAL open times whenever a follow-up proposes a meeting):\n{scheduling_context}\n" if scheduling_context else ""
     return f"""
 You are writing a sequence of follow-ups for a prospect who replied positively earlier and whom we
 ALREADY responded to, but who has since gone quiet. Read the full thread and continue naturally from
@@ -495,7 +715,7 @@ FOLLOW-UP FORMAT RULES:
 
 EMAIL THREAD (oldest to newest):
 {json.dumps(thread, indent=2)}
-
+{sched}
 ---
 Write a follow-up sequence:
 - "main_reply": the FIRST follow-up to send NOW. Lightly reference the prior conversation, add a fresh
@@ -523,12 +743,13 @@ Return ONLY valid JSON:
 """
 
 
-def generate_ai_reply(client_profile, reply_format, thread, mode="reply"):
+def generate_ai_reply(client_profile, reply_format, thread, mode="reply", scheduling_context=""):
     if mode == "followup":
-        prompt = _followup_prompt(client_profile, reply_format, thread)
+        prompt = _followup_prompt(client_profile, reply_format, thread, scheduling_context)
         system_msg = FOLLOWUP_SYSTEM
         return _call_openai(prompt, system_msg)
 
+    sched = f"\nLIVE SCHEDULING (use these REAL open times whenever you propose a meeting):\n{scheduling_context}\n" if scheduling_context else ""
     prompt = f"""
 You are an expert outbound sales reply writer. Your job is to write replies that feel like they came from a sharp, real human — not a sales bot.
 
@@ -540,7 +761,7 @@ REPLY FORMAT RULES:
 
 EMAIL THREAD:
 {json.dumps(thread, indent=2)}
-
+{sched}
 ---
 
 STEP 1 — READ THE PROSPECT FIRST.
@@ -915,8 +1136,18 @@ def process_reply(lead_id, workspace_name):
     log("Building thread...")
     thread = build_thread(sent_emails, valid_replies)
 
+    # Real-availability scheduling (only when this client has a Calendly token).
+    scheduling_context = ""
+    if workspace.get("calendly_token"):
+        prospect_location = fetch_bison_lead_location(lead_id, workspace_bison_api_key, base_url)
+        log(f"Calendly: prospect location guess = '{prospect_location}'")
+        scheduling_context = build_scheduling_context(workspace, prospect_location)
+        if scheduling_context:
+            log("Calendly: injected real open times into the prompt.")
+
     log(f"Generating AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
-    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode)
+    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode,
+                                  scheduling_context=scheduling_context)
 
     if ai_result.get("main_reply"):
         ai_result["main_reply"] = add_signature(
@@ -1311,8 +1542,18 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     reply_format = workspace.get("reply_format", {})
     mode = workspace.get("mode", "reply")
 
+    # Real-availability scheduling (only when this client has a Calendly token).
+    scheduling_context = ""
+    if workspace.get("calendly_token"):
+        prospect_location = extract_location_from_data(lead_data)
+        log(f"Calendly: prospect location guess = '{prospect_location}'")
+        scheduling_context = build_scheduling_context(workspace, prospect_location)
+        if scheduling_context:
+            log("Calendly: injected real open times into the prompt.")
+
     log(f"Generating Instantly AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
-    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode)
+    ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode,
+                                  scheduling_context=scheduling_context)
 
     # Sender = the account that received the prospect's reply. Do NOT parse the
     # prospect's reply text for this (that grabs the prospect / quoted headers).

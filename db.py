@@ -82,6 +82,8 @@ class Workspace(Base):
     website = Column(Text, default="")
     sender_name = Column(Text, default="")
     default_sender_email = Column(Text, default="")
+    calendly_token = Column(Text, default="")              # Calendly Personal Access Token
+    calendly_scheduling_url = Column(Text, default="")     # client's public Calendly link
 
     client_profile = Column(JSON, default=dict)
     reply_format = Column(JSON, default=dict)
@@ -153,9 +155,18 @@ def migrate():
     # workspaces table additions
     try:
         ws_cols = {c["name"] for c in inspect(engine).get_columns("workspaces")}
-        if "mode" not in ws_cols:
-            with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE workspaces ADD COLUMN mode VARCHAR(20)"))
+        ws_adds = {
+            "mode": "VARCHAR(20)",
+            "calendly_token": "TEXT",
+            "calendly_scheduling_url": "TEXT",
+        }
+        with engine.begin() as conn:
+            for col, coltype in ws_adds.items():
+                if col not in ws_cols:
+                    try:
+                        conn.execute(text(f"ALTER TABLE workspaces ADD COLUMN {col} {coltype}"))
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -313,6 +324,8 @@ def get_workspace_config(name):
                 "website": ws.website or "",
                 "sender_name": ws.sender_name or "",
                 "default_sender_email": ws.default_sender_email or "",
+                "calendly_token": ws.calendly_token or "",
+                "calendly_scheduling_url": ws.calendly_scheduling_url or "",
                 "client_profile": ws.client_profile or {},
                 "reply_format": ws.reply_format or {},
             }
@@ -382,6 +395,8 @@ def save_workspace(ws_id, data):
         ws.website = data.get("website", "")
         ws.sender_name = data.get("sender_name", "")
         ws.default_sender_email = data.get("default_sender_email", "")
+        ws.calendly_token = data.get("calendly_token", "")
+        ws.calendly_scheduling_url = data.get("calendly_scheduling_url", "")
         ws.client_profile = data.get("client_profile", {})
         ws.reply_format = data.get("reply_format", {})
 
