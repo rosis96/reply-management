@@ -1018,6 +1018,27 @@ def get_latest_reply(replies):
     return replies[0]
 
 
+def _scan_for_campaign_id(obj, target):
+    """Recursively look for any field whose name contains 'campaign' whose value
+    equals `target`. Used to detect that a reply/sent-email belongs to the
+    follow-up campaign, regardless of Bison's exact field naming."""
+    target = str(target or "").strip()
+    if not target:
+        return False
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if "campaign" in str(k).lower() and not isinstance(v, (dict, list)):
+                if str(v).strip() == target:
+                    return True
+            if _scan_for_campaign_id(v, target):
+                return True
+    elif isinstance(obj, list):
+        for it in obj:
+            if _scan_for_campaign_id(it, target):
+                return True
+    return False
+
+
 def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, api_key, base_url):
     url = f"{base_url}/api/replies/{reply_id}/reply"
 
@@ -1148,6 +1169,17 @@ def process_reply(lead_id, workspace_name):
     default_sender_name = workspace.get("sender_name", "")
     reply_format = workspace.get("reply_format", {})
 
+    # GUARD: don't auto-reply to follow-up-campaign replies.
+    # Once we've replied to / enriched a lead, it's pushed into the follow-up
+    # campaign. Bison flags later follow-up replies as "interested" too, which
+    # would re-trigger us. In reply mode, if we've already handled this lead,
+    # skip — a human handles an already-engaged lead. (Follow-up mode is meant
+    # to re-run on past leads, so it is exempt.)
+    if mode != "followup" and db.lead_already_handled(workspace_name, lead_id):
+        log(f"Lead {lead_id} was already handled in '{workspace_name}'. This is most "
+            f"likely a reply inside the follow-up campaign, so NOT auto-replying.")
+        return
+
     log("Fetching replies...")
     replies = fetch_replies(lead_id, workspace_bison_api_key, base_url)
 
@@ -1177,6 +1209,15 @@ def process_reply(lead_id, workspace_name):
 
     log("Fetching sent emails...")
     sent_emails = fetch_sent_emails(lead_id, workspace_bison_api_key, base_url)
+
+    # Secondary guard: if this reply is tied to the follow-up campaign (the lead
+    # has already been sent follow-up-campaign emails), don't auto-reply.
+    if (mode != "followup" and reply_followup_campaign_id
+            and (_scan_for_campaign_id(sent_emails, reply_followup_campaign_id)
+                 or _scan_for_campaign_id(valid_replies, reply_followup_campaign_id))):
+        log(f"Reply on lead {lead_id} is tied to follow-up campaign "
+            f"{reply_followup_campaign_id}. NOT auto-replying to a follow-up-campaign reply.")
+        return
 
     sender_email = get_sender_email_from_sent_emails(sent_emails) or default_sender_email
     sender_name = get_sender_name_from_sent_emails(sent_emails) or sender_name_from_email(sender_email) or default_sender_name or "Team"
@@ -1594,6 +1635,13 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     client_profile = workspace.get("client_profile", {})
     reply_format = workspace.get("reply_format", {})
     mode = workspace.get("mode", "reply")
+
+    # GUARD: don't auto-reply to a lead we've already handled (e.g. it's now in
+    # a follow-up sequence and replied again). A human handles engaged leads.
+    if mode != "followup" and db.lead_already_handled(workspace_name, lead_id):
+        log(f"Instantly lead {lead_id} already handled in '{workspace_name}'. "
+            f"Likely a follow-up/subsequence reply, so NOT auto-replying.")
+        return
 
     # Real-availability scheduling (only when this client has a Calendly token).
     scheduling_context = ""

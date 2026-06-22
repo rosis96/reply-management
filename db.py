@@ -583,6 +583,26 @@ def get_lead(lead_id):
         session.close()
 
 
+def lead_already_handled(workspace_name, external_lead_id):
+    """True if we've ALREADY processed this lead in this workspace (sent a reply,
+    enriched follow-ups, or drafted a reply). Used to avoid re-replying when a
+    lead that is already in the follow-up campaign replies again."""
+    ext = str(external_lead_id or "")
+    if not ext:
+        return False
+    session = SessionLocal()
+    try:
+        return session.query(Lead.id).filter(
+            Lead.workspace_name == workspace_name,
+            Lead.external_lead_id == ext,
+            or_(Lead.replied.is_(True),
+                Lead.fup_added.is_(True),
+                Lead.reply_added.is_(True)),
+        ).first() is not None
+    finally:
+        session.close()
+
+
 def _apply_lead_filters(q, workspace=None, status=None, intent=None, action=None,
                         search=None, conf_min=None, date_from=None, date_to=None, stage=None):
     if workspace:
