@@ -442,6 +442,76 @@ tbody td { padding:13px 18px; height:auto; }
 .ltop-rt { margin-left:auto; display:flex; align-items:center; gap:14px; }
 .lcontent { padding:24px 28px 80px; max-width:1280px; }
 @media (max-width:1000px){ .lsidebar{display:none;} }
+
+/* ============ ASCENDLY · STITCH (Manrope / Purple) THEME ============ */
+:root {
+  --primary:#5f3add; --primary-c:#7857f8; --primary-deep:#4918c8;
+  --bg:#f8f9fa; --panel:#ffffff; --line:#d8d4e6;
+  --surf-low:#f3f4f5; --surf:#edeeef; --surf-high:#e7e8e9;
+  --txt:#191c1d; --muted:#56536a;
+  --accent:#5f3add; --accent-soft:#efe9ff; --emerald:#137333;
+  --ok:#137333; --ok-soft:#e6f4ea; --no:#ba1a1a; --no-soft:#ffdad6;
+  --blue:#5f3add; --blue-soft:#ece7ff; --violet:#5f3add; --violet-soft:#efe9ff;
+  --warn:#8a5a00; --warn-soft:#fdf2dd; --muted-soft:#edeeef;
+}
+body { font-family:'Manrope',-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+a { color:var(--primary); }
+
+/* brand chip */
+.lbrand { gap:10px; font-weight:800; letter-spacing:-.01em; }
+.lbrand .mark { display:none; }
+.lbrand .chip { width:30px; height:30px; border-radius:9px; background:var(--primary); color:#fff;
+                display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; }
+
+/* grouped sidebar */
+.lsidebar { background:var(--surf-low); }
+.lsec { color:#7d7990; font-weight:700; letter-spacing:.08em; }
+.lnav a { color:#484555; font-weight:600; border-radius:10px; }
+.lnav a .material-symbols-outlined { color:#6f6b82; }
+.lnav a:hover { background:#e6e1f4; color:var(--txt); }
+.lnav a.active { background:var(--primary-c); color:#fff; font-weight:700;
+                 box-shadow:inset 3px 0 0 var(--primary-deep); }
+.lnav a.active .material-symbols-outlined { color:#fff; }
+.nbadge { background:#e3e1ef; color:#56536a; }
+.lnav a.active .nbadge { background:rgba(255,255,255,.28); color:#fff; }
+.lnav-logout:hover { background:#e6e1f4; }
+.luser .avatar, .avatar { background:var(--primary); }
+
+/* top bar */
+.ltop { background:#fff; }
+.lsearch { background:#f1f0f6; border-color:var(--line); border-radius:11px; }
+.ws-btn:hover { border-color:var(--primary); }
+
+/* stat cards */
+.stat { border:1px solid var(--line); border-radius:16px; }
+.stat:hover { border-color:var(--primary); }
+.stat .bar i { background:var(--primary); }
+.stat.is-booked { border-color:var(--primary); } .stat.is-booked .l { color:var(--primary); }
+
+/* table */
+.tablewrap { border:1px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(25,28,29,.04); }
+thead th { background:#faf9fe; color:#56536a; }
+.lead-ava { background:#efe9ff; color:var(--primary); }
+.idot.pos { background:var(--emerald); }
+.eye { color:var(--primary); border-color:var(--line); }
+.eye:hover { box-shadow:0 2px 10px rgba(95,58,221,.22); }
+
+/* pills */
+.pill.ok { background:#e6f4ea; color:#137333; }
+.pill.blue { background:#ece7ff; color:var(--primary); }
+.pill.violet { background:#efe9ff; color:var(--primary); }
+.pill.muted { background:#edeeef; color:#56536a; }
+
+/* buttons + accents */
+.btn { background:var(--primary); border-radius:10px; }
+.btn:hover { background:#5331c9; filter:none; }
+.btn.sec { background:#fff; color:var(--txt); border:1px solid var(--line); }
+.btn.ok { background:#e6f4ea; color:#137333; }
+.linkbtn { color:var(--primary); }
+.pager .cur { background:var(--primary); border-color:var(--primary); }
+.banner { background:linear-gradient(135deg,#5f3add,#7857f8); box-shadow:0 10px 28px rgba(95,58,221,.28); }
+.banner .bbtn { color:var(--primary); }
+.fup .step { color:var(--primary); }
 """
 
 # (icon_key, tooltip, href, active_key)
@@ -618,12 +688,13 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
 <title>{e(title)}</title><style>{PAGE_CSS}</style></head><body>
 <div class="app">
   <aside class="lsidebar">
-    <div class="lbrand"><span class="material-symbols-outlined mark">bolt</span><span>Reply Manager</span></div>
+    <div class="lbrand"><span class="chip">A</span><span>Ascendly</span></div>
     <div class="lsec">Replies</div>
     <nav class="lnav">{nav_links(replies_nav)}</nav>
     <div class="lsec">Manage</div>
