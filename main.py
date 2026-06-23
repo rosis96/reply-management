@@ -751,7 +751,17 @@ FOLLOWUP_SYSTEM = (
 )
 
 
-def _followup_prompt(client_profile, reply_format, thread, scheduling_context=""):
+def _rules_block(rules):
+    """Free-form, user-pasted rules from the dashboard Rules page. Highest
+    priority so the operator can correct repeated mistakes without code changes."""
+    rules = (rules or "").strip()
+    if not rules:
+        return ""
+    return ("\n\nOPERATOR RULES (MANDATORY — follow these exactly; when they conflict with "
+            "anything above, THESE WIN):\n" + rules + "\n")
+
+
+def _followup_prompt(client_profile, reply_format, thread, scheduling_context="", extra_rules=""):
     sched = f"\nLIVE SCHEDULING (use these REAL open times whenever a follow-up proposes a meeting):\n{scheduling_context}\n" if scheduling_context else ""
     return f"""
 You are writing a sequence of follow-ups for a prospect who replied positively earlier and whom we
@@ -766,7 +776,7 @@ FOLLOW-UP FORMAT RULES:
 
 EMAIL THREAD (oldest to newest):
 {json.dumps(thread, indent=2)}
-{sched}
+{sched}{extra_rules}
 ---
 Write a follow-up sequence:
 - "main_reply": the FIRST follow-up to send NOW. Lightly reference the prior conversation, add a fresh
@@ -796,8 +806,10 @@ Return ONLY valid JSON:
 
 def generate_ai_reply(client_profile, reply_format, thread, mode="reply",
                       scheduling_context="", ai_cfg=None):
+    extra_rules = _rules_block(db.get_setting("ai_rules", ""))
+
     if mode == "followup":
-        prompt = _followup_prompt(client_profile, reply_format, thread, scheduling_context)
+        prompt = _followup_prompt(client_profile, reply_format, thread, scheduling_context, extra_rules)
         system_msg = FOLLOWUP_SYSTEM
         return _call_llm(prompt, system_msg, ai_cfg)
 
@@ -813,7 +825,7 @@ REPLY FORMAT RULES:
 
 EMAIL THREAD:
 {json.dumps(thread, indent=2)}
-{sched}
+{sched}{extra_rules}
 ---
 
 STEP 1 — READ THE PROSPECT FIRST.

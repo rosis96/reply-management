@@ -655,6 +655,7 @@ def layout(title, active, body, current_ws="", with_drawer=False):
         ("replied", "Replied", "reply", "/dashboard?status=replied", counts.get("replied", 0), False),
         ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
         ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
+        ("rules", "Rules", "rule", "/dashboard/rules", None, False),
     ]
     manage_nav = [
         ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
@@ -1388,6 +1389,40 @@ async def workspace_update(ws_id: int, request: Request, _: str = Depends(requir
 def workspace_delete(ws_id: int, _: str = Depends(require_login)):
     db.delete_workspace(ws_id)
     return RedirectResponse("/dashboard/workspaces", status_code=303)
+
+
+# -------------------------
+# AI Rules (free-form guidance the model reads on every reply)
+# -------------------------
+
+@router.get("/dashboard/rules", response_class=HTMLResponse)
+def rules_page(request: Request, saved: str = "", _: str = Depends(require_login)):
+    rules = db.get_setting("ai_rules", "")
+    saved_html = '<div class="card" style="border-color:var(--ok);color:var(--ok)">Saved.</div>' if saved else ""
+    placeholder = ("In the main reply, propose times for two days between 11 AM and 3 PM.\n"
+                   "In FUP1, propose new times along with the old ones.\n"
+                   "Never propose meetings on Mondays.")
+    body = f"""
+    <h1>AI Rules</h1>
+    <p class="sub">One rule per line, in plain English. The AI reads these every time it writes a reply or follow-up. Use this to correct mistakes it keeps making, without changing any code.</p>
+    {saved_html}
+    <form method="post" action="/dashboard/rules">
+      <div class="card">
+        <label>Rules (one per line)</label>
+        <textarea name="ai_rules" style="min-height:340px" placeholder="{e(placeholder)}">{e(rules)}</textarea>
+      </div>
+      <button class="btn" type="submit">Save rules</button>
+    </form>
+    <p class="muted small" style="margin-top:14px">These apply to every workspace. Keep them short and specific. Example: "In FUP1, always re-offer the original times plus one new option."</p>
+    """
+    return HTMLResponse(layout("AI Rules", "rules", body, current_ws=request.cookies.get("ws", "")))
+
+
+@router.post("/dashboard/rules")
+async def rules_save(request: Request, _: str = Depends(require_login)):
+    form = await request.form()
+    db.set_setting("ai_rules", form.get("ai_rules", ""))
+    return RedirectResponse("/dashboard/rules?saved=1", status_code=303)
 
 
 # -------------------------
