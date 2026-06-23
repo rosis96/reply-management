@@ -1267,6 +1267,7 @@ def _workspace_form(ws=None, error="", current_ws=""):
     provider = "openai" if is_new else (ws.ai_provider or "openai")
     psel_o = " selected" if provider == "openai" else ""
     psel_g = " selected" if provider == "gemini" else ""
+    fb_checked = "checked" if (not is_new and ws.ai_fallback) else ""
     err = f'<div class="card" style="border-color:var(--no);color:var(--no)">{e(error)}</div>' if error else ""
     delbtn = "" if is_new else f"""<form method="post" action="/dashboard/workspaces/{ws.id}/delete" onsubmit="return confirm('Delete this workspace?')" style="display:inline"><button class="btn danger" type="submit">Delete</button></form>"""
     body = f"""
@@ -1300,6 +1301,7 @@ def _workspace_form(ws=None, error="", current_ws=""):
         <h3>AI model</h3>
         <label>Provider for this workspace</label>
         <select name="ai_provider" style="width:100%"><option value="openai"{psel_o}>OpenAI (GPT-4.1)</option><option value="gemini"{psel_g}>Google Gemini (2.5 Pro)</option></select>
+        <label class="flex" style="margin-top:12px"><input type="checkbox" name="ai_fallback" value="1" {fb_checked} style="margin-right:8px"> Auto-fallback: if the chosen provider fails (error/quota), try the other one</label>
         <div class="row2">
           <div><label>OpenAI API key (optional override)</label><input type="text" name="openai_key" value="{e(g('openai_key'))}" placeholder="leave blank to use global key in Settings" style="width:100%"></div>
           <div><label>Gemini API key (optional override)</label><input type="text" name="gemini_key" value="{e(g('gemini_key'))}" placeholder="leave blank to use global key in Settings" style="width:100%"></div>
@@ -1350,6 +1352,7 @@ async def _read_workspace_form(request: Request):
         "calendly_token": form.get("calendly_token", ""),
         "calendly_scheduling_url": form.get("calendly_scheduling_url", ""),
         "ai_provider": form.get("ai_provider", "openai"),
+        "ai_fallback": form.get("ai_fallback") == "1",
         "openai_key": form.get("openai_key", ""),
         "gemini_key": form.get("gemini_key", ""),
         "active": form.get("active") == "1",

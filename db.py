@@ -85,7 +85,8 @@ class Workspace(Base):
     calendly_token = Column(Text, default="")              # Calendly Personal Access Token
     calendly_scheduling_url = Column(Text, default="")     # client's public Calendly link
 
-    ai_provider = Column(String(20), default="openai")     # "openai" or "gemini"
+    ai_provider = Column(String(20), default="openai")     # "openai" or "gemini" (primary, tried first)
+    ai_fallback = Column(Boolean, default=False)           # if primary fails, try the other provider
     openai_key = Column(Text, default="")                  # per-workspace override (else global setting)
     gemini_key = Column(Text, default="")                  # per-workspace override (else global setting)
 
@@ -177,6 +178,7 @@ def migrate():
             "calendly_token": "TEXT",
             "calendly_scheduling_url": "TEXT",
             "ai_provider": "VARCHAR(20)",
+            "ai_fallback": "BOOLEAN",
             "openai_key": "TEXT",
             "gemini_key": "TEXT",
         }
@@ -347,6 +349,7 @@ def get_workspace_config(name):
                 "calendly_token": ws.calendly_token or "",
                 "calendly_scheduling_url": ws.calendly_scheduling_url or "",
                 "ai_provider": ws.ai_provider or "openai",
+                "ai_fallback": bool(ws.ai_fallback),
                 "openai_key": ws.openai_key or "",
                 "gemini_key": ws.gemini_key or "",
                 "client_profile": ws.client_profile or {},
@@ -421,6 +424,7 @@ def save_workspace(ws_id, data):
         ws.calendly_token = data.get("calendly_token", "")
         ws.calendly_scheduling_url = data.get("calendly_scheduling_url", "")
         ws.ai_provider = data.get("ai_provider", "openai")
+        ws.ai_fallback = bool(data.get("ai_fallback", False))
         ws.openai_key = data.get("openai_key", "")
         ws.gemini_key = data.get("gemini_key", "")
         ws.client_profile = data.get("client_profile", {})

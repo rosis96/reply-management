@@ -935,6 +935,7 @@ def build_ai_cfg(workspace):
     provider = (workspace.get("ai_provider") or "openai").lower()
     return {
         "provider": provider,
+        "fallback": bool(workspace.get("ai_fallback")),
         "openai_key": (workspace.get("openai_key")
                        or db.get_setting("openai_api_key", "")
                        or os.getenv("OPENAI_API_KEY", "")),
@@ -947,17 +948,41 @@ def build_ai_cfg(workspace):
 
 
 def _call_llm(prompt, system_msg, ai_cfg=None):
+    """Try the workspace's chosen provider FIRST. If it fails (error/quota) and
+    auto-fallback is on, try the other provider. Returns the human-review
+    fallback only if every attempt fails."""
     ai_cfg = ai_cfg or {}
-    provider = (ai_cfg.get("provider") or "openai").lower()
-    if provider == "gemini":
-        return _call_gemini(prompt, system_msg, ai_cfg.get("gemini_key", ""),
-                            ai_cfg.get("gemini_model", "gemini-2.5-pro"))
-    return _call_openai(prompt, system_msg, ai_cfg.get("openai_key", ""),
-                        ai_cfg.get("openai_model", "gpt-4.1"))
+    primary = (ai_cfg.get("provider") or "openai").lower()
+    other = "gemini" if primary == "openai" else "openai"
+
+    order = [primary]
+    if ai_cfg.get("fallback"):
+        order.append(other)
+
+    for prov in order:
+        if prov == "gemini":
+            result = _call_gemini(prompt, system_msg, ai_cfg.get("gemini_key", ""),
+                                  ai_cfg.get("gemini_model", "gemini-2.5-pro"))
+        else:
+            result = _call_openai(prompt, system_msg, ai_cfg.get("openai_key", ""),
+                                  ai_cfg.get("openai_model", "gpt-4.1"))
+        if result is not None:
+            if prov != primary:
+                log(f"AI fallback: '{primary}' failed, used '{prov}' instead.")
+            return result
+        log(f"AI provider '{prov}' failed.")
+
+    log("All AI providers failed. Returning human-review fallback.")
+    return dict(_LLM_FALLBACK)
 
 
 def _call_openai(prompt, system_msg, api_key="", model="gpt-4.1"):
-    client = OpenAI(api_key=api_key) if api_key else get_openai_client()
+    """Return a dict on success, or None on total failure (so _call_llm can fall back)."""
+    try:
+        client = OpenAI(api_key=api_key) if api_key else get_openai_client()
+    except Exception as e:
+        log(f"OpenAI client init failed: {e}")
+        return None
 
     for attempt in range(3):
         try:
@@ -977,13 +1002,14 @@ def _call_openai(prompt, system_msg, api_key="", model="gpt-4.1"):
             if attempt < 2:
                 time.sleep(3)
 
-    return dict(_LLM_FALLBACK)
+    return None
 
 
 def _call_gemini(prompt, system_msg, api_key="", model="gemini-2.5-pro"):
+    """Return a dict on success, or None on total failure (so _call_llm can fall back)."""
     if not api_key:
-        log("Gemini selected but no API key set (workspace or global). Falling back to human review.")
-        return dict(_LLM_FALLBACK)
+        log("Gemini has no API key set (workspace or global).")
+        return None
 
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{model or 'gemini-2.5-pro'}:generateContent")
@@ -1010,7 +1036,7 @@ def _call_gemini(prompt, system_msg, api_key="", model="gemini-2.5-pro"):
             if attempt < 2:
                 time.sleep(3)
 
-    return dict(_LLM_FALLBACK)
+    return None
 
 
 def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
