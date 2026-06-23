@@ -794,11 +794,12 @@ Return ONLY valid JSON:
 """
 
 
-def generate_ai_reply(client_profile, reply_format, thread, mode="reply", scheduling_context=""):
+def generate_ai_reply(client_profile, reply_format, thread, mode="reply",
+                      scheduling_context="", ai_cfg=None):
     if mode == "followup":
         prompt = _followup_prompt(client_profile, reply_format, thread, scheduling_context)
         system_msg = FOLLOWUP_SYSTEM
-        return _call_openai(prompt, system_msg)
+        return _call_llm(prompt, system_msg, ai_cfg)
 
     sched = f"\nLIVE SCHEDULING (use these REAL open times whenever you propose a meeting):\n{scheduling_context}\n" if scheduling_context else ""
     prompt = f"""
@@ -900,37 +901,116 @@ Return ONLY valid JSON:
                   "valid JSON. No markdown. Never add sign-offs, sender names, initials, websites, or "
                   "signatures. Stop right after the CTA or final message. NEVER return an empty "
                   "main_reply unless intent is unsubscribe or negative_not_interested.")
-    return _call_openai(prompt, system_msg)
+    return _call_llm(prompt, system_msg, ai_cfg)
 
 
-def _call_openai(prompt, system_msg):
-    client = get_openai_client()
+_LLM_FALLBACK = {
+    "intent": "human_review",
+    "confidence": 0,
+    "human_review_needed": True,
+    "main_reply": "",
+    "followup_1": "", "followup_2": "", "followup_3": "", "followup_4": "",
+    "followup_5": "", "followup_6": "", "followup_7": "", "followup_8": "",
+}
+
+
+def _parse_llm_json(raw):
+    """Parse model output to a dict, tolerating ```json fences / stray text."""
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-zA-Z]*\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw).strip()
+    try:
+        return json.loads(raw)
+    except Exception:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        raise
+
+
+def build_ai_cfg(workspace):
+    """Resolve which LLM to use for this workspace, with per-workspace key
+    overrides falling back to the global settings / env."""
+    provider = (workspace.get("ai_provider") or "openai").lower()
+    return {
+        "provider": provider,
+        "openai_key": (workspace.get("openai_key")
+                       or db.get_setting("openai_api_key", "")
+                       or os.getenv("OPENAI_API_KEY", "")),
+        "gemini_key": (workspace.get("gemini_key")
+                       or db.get_setting("gemini_api_key", "")
+                       or os.getenv("GEMINI_API_KEY", "")),
+        "openai_model": db.get_setting("openai_model", "") or "gpt-4.1",
+        "gemini_model": db.get_setting("gemini_model", "") or "gemini-2.5-pro",
+    }
+
+
+def _call_llm(prompt, system_msg, ai_cfg=None):
+    ai_cfg = ai_cfg or {}
+    provider = (ai_cfg.get("provider") or "openai").lower()
+    if provider == "gemini":
+        return _call_gemini(prompt, system_msg, ai_cfg.get("gemini_key", ""),
+                            ai_cfg.get("gemini_model", "gemini-2.5-pro"))
+    return _call_openai(prompt, system_msg, ai_cfg.get("openai_key", ""),
+                        ai_cfg.get("openai_model", "gpt-4.1"))
+
+
+def _call_openai(prompt, system_msg, api_key="", model="gpt-4.1"):
+    client = OpenAI(api_key=api_key) if api_key else get_openai_client()
 
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
-                model="gpt-4.1",
+                model=model or "gpt-4.1",
                 temperature=0.6,
+                response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": prompt},
                 ],
             )
             raw = response.choices[0].message.content.strip()
-            return json.loads(raw)
+            return _parse_llm_json(raw)
         except Exception as e:
             log(f"OpenAI attempt {attempt + 1} failed: {str(e)}")
             if attempt < 2:
                 time.sleep(3)
 
-    return {
-        "intent": "human_review",
-        "confidence": 0,
-        "human_review_needed": True,
-        "main_reply": "",
-        "followup_1": "", "followup_2": "", "followup_3": "", "followup_4": "",
-        "followup_5": "", "followup_6": "", "followup_7": "", "followup_8": "",
+    return dict(_LLM_FALLBACK)
+
+
+def _call_gemini(prompt, system_msg, api_key="", model="gemini-2.5-pro"):
+    if not api_key:
+        log("Gemini selected but no API key set (workspace or global). Falling back to human review.")
+        return dict(_LLM_FALLBACK)
+
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{model or 'gemini-2.5-pro'}:generateContent")
+    body = {
+        "systemInstruction": {"parts": [{"text": system_msg}]},
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.6, "responseMimeType": "application/json"},
     }
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, params={"key": api_key}, json=body, timeout=60)
+            if resp.status_code != 200:
+                log(f"Gemini attempt {attempt + 1} HTTP {resp.status_code}: {resp.text[:200]}")
+                if attempt < 2:
+                    time.sleep(3)
+                continue
+            data = resp.json()
+            parts = (data.get("candidates", [{}])[0]
+                         .get("content", {}).get("parts", [{}]))
+            raw = "".join(p.get("text", "") for p in parts).strip()
+            return _parse_llm_json(raw)
+        except Exception as e:
+            log(f"Gemini attempt {attempt + 1} failed: {str(e)}")
+            if attempt < 2:
+                time.sleep(3)
+
+    return dict(_LLM_FALLBACK)
 
 
 def notify_human_review(lead_id, reply_id, workspace_name, thread, ai_result):
@@ -1239,9 +1319,11 @@ def process_reply(lead_id, workspace_name):
         if scheduling_context:
             log("Calendly: injected real open times into the prompt.")
 
-    log(f"Generating AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
+    ai_cfg = build_ai_cfg(workspace)
+    log(f"Generating AI {'follow-ups' if mode == 'followup' else 'reply + followups'} "
+        f"via {ai_cfg['provider']}...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode,
-                                  scheduling_context=scheduling_context)
+                                  scheduling_context=scheduling_context, ai_cfg=ai_cfg)
 
     if ai_result.get("main_reply"):
         ai_result["main_reply"] = add_signature(
@@ -1654,9 +1736,11 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
         if scheduling_context:
             log("Calendly: injected real open times into the prompt.")
 
-    log(f"Generating Instantly AI {'follow-ups' if mode == 'followup' else 'reply + followups'}...")
+    ai_cfg = build_ai_cfg(workspace)
+    log(f"Generating Instantly AI {'follow-ups' if mode == 'followup' else 'reply + followups'} "
+        f"via {ai_cfg['provider']}...")
     ai_result = generate_ai_reply(client_profile, reply_format, thread, mode=mode,
-                                  scheduling_context=scheduling_context)
+                                  scheduling_context=scheduling_context, ai_cfg=ai_cfg)
 
     # Sender = the account that received the prospect's reply. Do NOT parse the
     # prospect's reply text for this (that grabs the prospect / quoted headers).

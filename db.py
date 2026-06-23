@@ -85,6 +85,10 @@ class Workspace(Base):
     calendly_token = Column(Text, default="")              # Calendly Personal Access Token
     calendly_scheduling_url = Column(Text, default="")     # client's public Calendly link
 
+    ai_provider = Column(String(20), default="openai")     # "openai" or "gemini"
+    openai_key = Column(Text, default="")                  # per-workspace override (else global setting)
+    gemini_key = Column(Text, default="")                  # per-workspace override (else global setting)
+
     client_profile = Column(JSON, default=dict)
     reply_format = Column(JSON, default=dict)
 
@@ -172,6 +176,9 @@ def migrate():
             "mode": "VARCHAR(20)",
             "calendly_token": "TEXT",
             "calendly_scheduling_url": "TEXT",
+            "ai_provider": "VARCHAR(20)",
+            "openai_key": "TEXT",
+            "gemini_key": "TEXT",
         }
         with engine.begin() as conn:
             for col, coltype in ws_adds.items():
@@ -339,6 +346,9 @@ def get_workspace_config(name):
                 "default_sender_email": ws.default_sender_email or "",
                 "calendly_token": ws.calendly_token or "",
                 "calendly_scheduling_url": ws.calendly_scheduling_url or "",
+                "ai_provider": ws.ai_provider or "openai",
+                "openai_key": ws.openai_key or "",
+                "gemini_key": ws.gemini_key or "",
                 "client_profile": ws.client_profile or {},
                 "reply_format": ws.reply_format or {},
             }
@@ -410,6 +420,9 @@ def save_workspace(ws_id, data):
         ws.default_sender_email = data.get("default_sender_email", "")
         ws.calendly_token = data.get("calendly_token", "")
         ws.calendly_scheduling_url = data.get("calendly_scheduling_url", "")
+        ws.ai_provider = data.get("ai_provider", "openai")
+        ws.openai_key = data.get("openai_key", "")
+        ws.gemini_key = data.get("gemini_key", "")
         ws.client_profile = data.get("client_profile", {})
         ws.reply_format = data.get("reply_format", {})
 

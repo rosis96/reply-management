@@ -1264,6 +1264,9 @@ def _workspace_form(ws=None, error="", current_ws=""):
     mode = "reply" if is_new else (ws.mode or "reply")
     mrep = " selected" if mode == "reply" else ""
     mfup = " selected" if mode == "followup" else ""
+    provider = "openai" if is_new else (ws.ai_provider or "openai")
+    psel_o = " selected" if provider == "openai" else ""
+    psel_g = " selected" if provider == "gemini" else ""
     err = f'<div class="card" style="border-color:var(--no);color:var(--no)">{e(error)}</div>' if error else ""
     delbtn = "" if is_new else f"""<form method="post" action="/dashboard/workspaces/{ws.id}/delete" onsubmit="return confirm('Delete this workspace?')" style="display:inline"><button class="btn danger" type="submit">Delete</button></form>"""
     body = f"""
@@ -1293,10 +1296,21 @@ def _workspace_form(ws=None, error="", current_ws=""):
         </div>
         <label class="flex"><input type="checkbox" name="active" value="1" {active_checked} style="margin-right:8px"> Active</label>
       </div>
+      <div class="card">
+        <h3>AI model</h3>
+        <label>Provider for this workspace</label>
+        <select name="ai_provider" style="width:100%"><option value="openai"{psel_o}>OpenAI (GPT-4.1)</option><option value="gemini"{psel_g}>Google Gemini (2.5 Pro)</option></select>
+        <div class="row2">
+          <div><label>OpenAI API key (optional override)</label><input type="text" name="openai_key" value="{e(g('openai_key'))}" placeholder="leave blank to use global key in Settings" style="width:100%"></div>
+          <div><label>Gemini API key (optional override)</label><input type="text" name="gemini_key" value="{e(g('gemini_key'))}" placeholder="leave blank to use global key in Settings" style="width:100%"></div>
+        </div>
+        <p class="muted small" style="margin-top:8px">Blank keys fall back to the global keys set in Settings.</p>
+      </div>
       <div class="card"><h3>Client profile (JSON)</h3><textarea name="client_profile">{e(profile)}</textarea></div>
       <div class="card"><h3>Reply format (JSON)</h3><textarea name="reply_format">{e(rformat)}</textarea></div>
-      <div class="flex"><button class="btn" type="submit">Save</button>{delbtn}</div>
+      <div class="flex"><button class="btn" type="submit">Save</button></div>
     </form>
+    <div class="flex" style="margin-top:12px">{delbtn}</div>
     """
     return layout(title, "workspaces", body, current_ws=current_ws)
 
@@ -1335,6 +1349,9 @@ async def _read_workspace_form(request: Request):
         "default_sender_email": form.get("default_sender_email", ""),
         "calendly_token": form.get("calendly_token", ""),
         "calendly_scheduling_url": form.get("calendly_scheduling_url", ""),
+        "ai_provider": form.get("ai_provider", "openai"),
+        "openai_key": form.get("openai_key", ""),
+        "gemini_key": form.get("gemini_key", ""),
         "active": form.get("active") == "1",
         "client_profile": _parse_json_field(form.get("client_profile"), "Client profile"),
         "reply_format": _parse_json_field(form.get("reply_format"), "Reply format"),
@@ -1382,7 +1399,18 @@ def settings_page(request: Request, saved: str = "", _: str = Depends(require_lo
     <h1>Settings</h1>{saved_html}
     <form method="post" action="/dashboard/settings">
       <div class="card">
-        <label>OpenAI API key</label><input type="text" name="openai_api_key" value="{e(s.get('openai_api_key',''))}" style="width:100%">
+        <h3>AI models (global defaults)</h3>
+        <div class="row2">
+          <div><label>OpenAI API key</label><input type="text" name="openai_api_key" value="{e(s.get('openai_api_key',''))}" style="width:100%"></div>
+          <div><label>Gemini API key</label><input type="text" name="gemini_api_key" value="{e(s.get('gemini_api_key',''))}" style="width:100%"></div>
+        </div>
+        <div class="row2">
+          <div><label>OpenAI model</label><input type="text" name="openai_model" value="{e(s.get('openai_model','gpt-4.1'))}" placeholder="gpt-4.1" style="width:100%"></div>
+          <div><label>Gemini model</label><input type="text" name="gemini_model" value="{e(s.get('gemini_model','gemini-2.5-pro'))}" placeholder="gemini-2.5-pro" style="width:100%"></div>
+        </div>
+        <p class="muted small" style="margin-top:8px">Each workspace picks its provider; these keys are used unless a workspace sets its own.</p>
+      </div>
+      <div class="card">
         <label>Human review webhook URL</label><input type="text" name="human_review_webhook_url" value="{e(s.get('human_review_webhook_url',''))}" style="width:100%">
         <div class="row2">
           <div><label>Default EmailBison base URL</label><input type="text" name="emailbison_base_url" value="{e(s.get('emailbison_base_url',''))}" style="width:100%"></div>
@@ -1403,7 +1431,8 @@ def settings_page(request: Request, saved: str = "", _: str = Depends(require_lo
 @router.post("/dashboard/settings")
 async def settings_save(request: Request, _: str = Depends(require_login)):
     form = await request.form()
-    for key in ["openai_api_key", "human_review_webhook_url", "emailbison_base_url",
+    for key in ["openai_api_key", "gemini_api_key", "openai_model", "gemini_model",
+                "human_review_webhook_url", "emailbison_base_url",
                 "reply_delay_seconds", "followup_trigger_tag", "reply_trigger_tag"]:
         db.set_setting(key, form.get(key, ""))
     return RedirectResponse("/dashboard/settings?saved=1", status_code=303)
