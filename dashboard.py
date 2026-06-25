@@ -15,35 +15,109 @@ import io
 import csv
 import json
 import math
+import hmac
+import hashlib
 import secrets
 import html as _html
 from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 import db
 
 router = APIRouter()
-security = HTTPBasic()
 
 PAGE_SIZE = 25
+SESSION_COOKIE = "rm_session"
 
 
 # -------------------------
-# Auth
+# Auth (cookie session + branded login page)
 # -------------------------
 
-def require_login(credentials: HTTPBasicCredentials = Depends(security)):
+def _auth_secret():
+    base = os.getenv("DASHBOARD_SECRET", "") or os.getenv("DASHBOARD_PASSWORD", "changeme")
+    return hashlib.sha256(("ascendly-rm::" + base).encode()).hexdigest()
+
+
+def _make_token():
+    return hmac.new(_auth_secret().encode(), b"authenticated", hashlib.sha256).hexdigest()
+
+
+def _valid_token(token):
+    return bool(token) and secrets.compare_digest(token, _make_token())
+
+
+def require_login(request: Request):
+    """Cookie-session guard. Redirects to the branded /login page instead of
+    triggering the browser's native HTTP Basic popup."""
+    if _valid_token(request.cookies.get(SESSION_COOKIE, "")):
+        return os.getenv("DASHBOARD_USER", "admin")
+    raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+def _login_html(error=""):
+    err = f'<div class="err">{e(error)}</div>' if error else ""
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>Sign in · Ascendly</title>
+<style>
+  *{{box-sizing:border-box}} html,body{{height:100%;margin:0}}
+  body{{font-family:'Manrope',-apple-system,Segoe UI,Roboto,sans-serif;background:#f3f1fb;
+        display:flex;align-items:center;justify-content:center;color:#191c1d}}
+  .card{{background:#fff;border:1px solid #e1ddef;border-radius:18px;padding:34px 30px;width:360px;
+         box-shadow:0 18px 50px rgba(95,58,221,.12)}}
+  .brand{{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;margin-bottom:6px}}
+  .brand .chip{{width:34px;height:34px;border-radius:10px;background:#5f3add;color:#fff;display:flex;
+                align-items:center;justify-content:center;font-weight:800;font-size:17px}}
+  .sub{{color:#6b6880;font-size:13px;margin:0 0 22px}}
+  label{{display:block;font-size:12px;font-weight:600;color:#56536a;margin:14px 0 6px}}
+  input{{width:100%;border:1px solid #d8d4e6;border-radius:11px;padding:11px 13px;font-size:14px;
+         font-family:inherit;background:#faf9ff}}
+  input:focus{{outline:2px solid #ece7ff;border-color:#5f3add}}
+  button{{width:100%;margin-top:22px;background:#5f3add;color:#fff;border:none;border-radius:11px;
+          padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}}
+  button:hover{{background:#5331c9}}
+  .err{{background:#ffdad6;color:#93000a;border-radius:10px;padding:9px 12px;font-size:13px;
+        font-weight:600;margin-bottom:14px}}
+</style></head><body>
+  <form class="card" method="post" action="/login">
+    <div class="brand"><span class="chip">A</span><span>Ascendly</span></div>
+    <p class="sub">Reply Manager · sign in to continue</p>
+    {err}
+    <label>Username</label>
+    <input type="text" name="username" value="admin" autocomplete="username" autofocus>
+    <label>Password</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+  </form>
+</body></html>"""
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if _valid_token(request.cookies.get(SESSION_COOKIE, "")):
+        return RedirectResponse("/dashboard", status_code=303)
+    return HTMLResponse(_login_html())
+
+
+@router.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
     user = os.getenv("DASHBOARD_USER", "admin")
     password = os.getenv("DASHBOARD_PASSWORD", "changeme")
-    ok = (secrets.compare_digest(credentials.username, user)
-          and secrets.compare_digest(credentials.password, password))
+    u = form.get("username", "") or ""
+    p = form.get("password", "") or ""
+    ok = secrets.compare_digest(u, user) and secrets.compare_digest(p, password)
     if not ok:
-        raise HTTPException(status_code=401, detail="Unauthorized",
-                            headers={"WWW-Authenticate": "Basic"})
-    return credentials.username
+        return HTMLResponse(_login_html("Wrong username or password."), status_code=401)
+    resp = RedirectResponse("/dashboard", status_code=303)
+    resp.set_cookie(SESSION_COOKIE, _make_token(), max_age=60 * 60 * 24 * 30,
+                    httponly=True, samesite="lax")
+    return resp
 
 
 # -------------------------
@@ -739,8 +813,9 @@ def switch_workspace(workspace: str = "", _: str = Depends(require_login)):
 
 @router.get("/dashboard/logout")
 def logout():
-    return Response("Logged out. Close this tab or log in again.", status_code=401,
-                    headers={"WWW-Authenticate": "Basic"})
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
 
 
 @router.get("/dashboard/soon", response_class=HTMLResponse)
