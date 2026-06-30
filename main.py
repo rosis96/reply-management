@@ -96,12 +96,29 @@ SEND_KEYWORDS = [
 ]
 
 
-def decide_reply_action(ai_result):
+def _auto_send_types(reply_format):
+    """If the reply_format uses the new `response_types` schema, return the set
+    of type-ids marked auto_send=true. Returns None for old/legacy formats so
+    the legacy keyword logic is used instead."""
+    if not isinstance(reply_format, dict):
+        return None
+    rts = reply_format.get("response_types")
+    if not isinstance(rts, list) or not rts:
+        return None
+    return {str(r.get("type", "")).strip().lower()
+            for r in rts if isinstance(r, dict) and r.get("auto_send")}
+
+
+def decide_reply_action(ai_result, reply_format=None):
     """Return one of: 'send', 'skip_enrich', 'stop'.
 
     send        -> auto-reply the prospect + enrich + push to follow-up
-    skip_enrich -> do NOT reply (human handles it) but still enrich + push to follow-up
+    skip_enrich -> do NOT reply (human reviews/sends) but still enrich + push to follow-up
     stop        -> do nothing (opt-out, out-of-office, automated, wrong person)
+
+    With the new response_types schema, ONLY types explicitly marked
+    auto_send=true are sent automatically; every other (and any unclear) reply
+    is drafted and routed to Needs Review for a human to check and hit send.
     """
     intent = str(ai_result.get("intent", "")).strip().lower()
 
@@ -117,15 +134,19 @@ def decide_reply_action(ai_result):
     if ai_result.get("human_review_needed") is True:
         return "stop"
 
-    # 2) Simple positives -> auto-send.
+    # 2) Format-driven decision (new schema): auto-send only the marked types,
+    #    draft everything else for human review.
+    auto_types = _auto_send_types(reply_format)
+    if auto_types is not None:
+        return "send" if intent in auto_types else "skip_enrich"
+
+    # 3) Legacy fallback (old single-main_reply formats): keyword whitelist.
     if intent in AUTO_SEND_INTENTS:
         return "send"
     for kw in SEND_KEYWORDS:
         if kw in intent:
             return "send"
 
-    # 3) Everything else (pricing, case studies, proof, off-topic, objections)
-    #    -> a human handles the reply, but still enrich + push to follow-up.
     return "skip_enrich"
 
 
@@ -828,6 +849,15 @@ EMAIL THREAD:
 {sched}{extra_rules}
 ---
 
+STEP 0 — USE THE RESPONSE TYPES (if the REPLY FORMAT RULES include "response_types").
+- Read the prospect's LATEST message and pick the SINGLE best-matching entry in "response_types",
+  using each entry's "examples" and "intent" to decide.
+- Set the JSON "intent" field to that entry's "type" id exactly (e.g. "simple_positive", "pricing_question").
+- Write "main_reply" by following that entry's "template" and obeying its "rules" exactly.
+- If nothing clearly matches, choose "out_of_context_question" (or the closest non-positive type) so a
+  human can review — do NOT force a positive.
+- Base "followup_1" through "followup_6" on the "followups" list in order, if present.
+
 STEP 1 — READ THE PROSPECT FIRST.
 Before writing anything, assess:
 - What is their energy? (casual, formal, skeptical, warm, funny, rushed, curious)
@@ -1371,7 +1401,7 @@ def process_reply(lead_id, workspace_name):
         )
 
     # Follow-up mode always sends the first follow-up + enriches; otherwise classify.
-    action = "send" if mode == "followup" else decide_reply_action(ai_result)
+    action = "send" if mode == "followup" else decide_reply_action(ai_result, reply_format)
     log(f"Reply action: {action} (mode={mode}, intent={ai_result.get('intent')})")
 
     if action == "stop":
@@ -1805,7 +1835,7 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
             website
         )
 
-    action = "send" if mode == "followup" else decide_reply_action(ai_result)
+    action = "send" if mode == "followup" else decide_reply_action(ai_result, reply_format)
     log(f"Instantly reply action: {action} (mode={mode}, intent={ai_result.get('intent')})")
 
     if action == "stop":

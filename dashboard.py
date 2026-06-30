@@ -1325,6 +1325,160 @@ def workspaces_page(request: Request, _: str = Depends(require_login)):
     return HTMLResponse(layout("Workspaces", "workspaces", body, current_ws=request.cookies.get("ws", "")))
 
 
+WORKSPACE_FORM_JS = r"""
+function _splitCommas(s){ return (s||'').split(',').map(function(x){return x.trim();}).filter(Boolean); }
+function _splitLines(s){ return (s||'').split('\n').map(function(x){return x.trim();}).filter(Boolean); }
+var RF_CARD_STYLE = 'border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:#fbfaff';
+
+function rtCard(d){
+  d = d || {};
+  var card = document.createElement('div');
+  card.className = 'rt-card';
+  card.setAttribute('style', RF_CARD_STYLE);
+  card.innerHTML =
+    '<div class="row2">'
+    + '<div><label>Type (id)</label><input class="rt-type" type="text" style="width:100%" placeholder="simple_positive"></div>'
+    + '<div><label>Auto-send?</label><label class="flex" style="margin-top:6px"><input class="rt-autosend" type="checkbox" style="margin-right:8px"> send automatically on a confident match</label></div>'
+    + '</div>'
+    + '<label>When it applies (intent)</label><input class="rt-intent" type="text" style="width:100%">'
+    + '<label>Example replies (comma separated)</label><input class="rt-examples" type="text" style="width:100%" placeholder="yes, sure, interested, tell me more">'
+    + '<label>Response template</label><textarea class="rt-template" style="width:100%;min-height:120px"></textarea>'
+    + '<label>Rules / conditions (one per line)</label><textarea class="rt-rules" style="width:100%;min-height:64px"></textarea>'
+    + '<div style="text-align:right;margin-top:6px"><button type="button" class="btn sec sm" onclick="this.closest(\'.rt-card\').remove()">Remove</button></div>';
+  card.querySelector('.rt-type').value = d.type || '';
+  card.querySelector('.rt-autosend').checked = !!d.auto_send;
+  card.querySelector('.rt-intent').value = d.intent || '';
+  card.querySelector('.rt-examples').value = (d.examples || []).join(', ');
+  card.querySelector('.rt-template').value = d.template || '';
+  card.querySelector('.rt-rules').value = (d.rules || []).join('\n');
+  return card;
+}
+function addResponseType(d){ document.getElementById('rt-list').appendChild(rtCard(d)); }
+
+function fuCard(d){
+  d = d || {};
+  var card = document.createElement('div');
+  card.className = 'fu-card';
+  card.setAttribute('style', RF_CARD_STYLE);
+  card.innerHTML =
+    '<div class="row2">'
+    + '<div><label>Label</label><input class="fu-label" type="text" style="width:100%" placeholder="FUP1"></div>'
+    + '<div><label>Max words</label><input class="fu-maxwords" type="number" style="width:100%" placeholder="90"></div>'
+    + '</div>'
+    + '<label>Purpose (intent)</label><input class="fu-intent" type="text" style="width:100%">'
+    + '<label>Template</label><textarea class="fu-template" style="width:100%;min-height:104px"></textarea>'
+    + '<div style="text-align:right;margin-top:6px"><button type="button" class="btn sec sm" onclick="this.closest(\'.fu-card\').remove()">Remove</button></div>';
+  card.querySelector('.fu-label').value = d.label || '';
+  card.querySelector('.fu-maxwords').value = d.max_words || '';
+  card.querySelector('.fu-intent').value = d.intent || d.purpose || '';
+  card.querySelector('.fu-template').value = d.template || '';
+  return card;
+}
+function addFollowup(d){ document.getElementById('fu-list').appendChild(fuCard(d)); }
+
+var RF_ADV_EXCLUDE = ['format_name','mode','response_types','followups','main_reply','simple_positive_examples'];
+
+function rfFill(obj){
+  obj = obj || {};
+  document.getElementById('rf_format_name').value = obj.format_name || '';
+  document.getElementById('rf_mode').value = obj.mode || 'reply';
+
+  // response types (migrate old single main_reply if needed)
+  document.getElementById('rt-list').innerHTML = '';
+  var rts = obj.response_types;
+  if (!Array.isArray(rts)) {
+    rts = [];
+    if (obj.main_reply) {
+      var mr = obj.main_reply;
+      rts.push({
+        type: (mr.intent || 'simple_positive'),
+        intent: 'Simple positive interested reply.',
+        examples: (obj.simple_positive_examples || []),
+        auto_send: true,
+        template: (typeof mr === 'string' ? mr : (mr.template || '')),
+        rules: []
+      });
+    }
+  }
+  rts.forEach(addResponseType);
+
+  // followups (migrate old object form to array)
+  document.getElementById('fu-list').innerHTML = '';
+  var fups = obj.followups;
+  if (fups && !Array.isArray(fups)) {
+    fups = Object.keys(fups).map(function(k){
+      var f = fups[k] || {};
+      return { key:k, label:(f.label||k), intent:(f.purpose||f.intent||''), max_words:(f.max_words||0), template:(f.template||'') };
+    });
+  }
+  (fups || []).forEach(addFollowup);
+
+  // everything else -> advanced JSON box
+  var adv = {};
+  Object.keys(obj).forEach(function(k){ if (RF_ADV_EXCLUDE.indexOf(k) === -1) adv[k] = obj[k]; });
+  document.getElementById('rf_advanced').value = Object.keys(adv).length ? JSON.stringify(adv, null, 2) : '';
+}
+
+function rfCollect(){
+  var rts = [].slice.call(document.querySelectorAll('.rt-card')).map(function(c){
+    return {
+      type: c.querySelector('.rt-type').value.trim(),
+      intent: c.querySelector('.rt-intent').value.trim(),
+      examples: _splitCommas(c.querySelector('.rt-examples').value),
+      auto_send: c.querySelector('.rt-autosend').checked,
+      template: c.querySelector('.rt-template').value,
+      rules: _splitLines(c.querySelector('.rt-rules').value)
+    };
+  });
+  var fus = [].slice.call(document.querySelectorAll('.fu-card')).map(function(c, i){
+    return {
+      key: 'followup_' + (i + 1),
+      label: c.querySelector('.fu-label').value.trim() || ('FUP' + (i + 1)),
+      intent: c.querySelector('.fu-intent').value.trim(),
+      max_words: parseInt(c.querySelector('.fu-maxwords').value, 10) || 0,
+      template: c.querySelector('.fu-template').value
+    };
+  });
+  var adv = {};
+  var advRaw = (document.getElementById('rf_advanced').value || '').trim();
+  if (advRaw) { adv = JSON.parse(advRaw); }
+  var out = { format_name: document.getElementById('rf_format_name').value.trim(),
+              mode: document.getElementById('rf_mode').value,
+              response_types: rts, followups: fus };
+  Object.keys(adv).forEach(function(k){ if (RF_ADV_EXCLUDE.indexOf(k) === -1 || k === 'placeholders') out[k] = adv[k]; });
+  return out;
+}
+
+function rfSerialize(){
+  try {
+    var obj = rfCollect();
+    document.getElementById('reply_format').value = JSON.stringify(obj, null, 2);
+    return true;
+  } catch (e) {
+    alert('Advanced settings JSON is invalid, please fix it before saving:\n' + e.message);
+    return false;
+  }
+}
+
+function rfPaste(){
+  var raw = (document.getElementById('rf_paste').value || '').trim();
+  if (!raw) { alert('Paste your Reply Format JSON first.'); return; }
+  var obj;
+  try { obj = JSON.parse(raw); }
+  catch (e) { alert('That is not valid JSON:\n' + e.message); return; }
+  rfFill(obj);
+  document.getElementById('rf_paste').value = '';
+  alert('Sections filled from JSON. Review them, then click Save.');
+}
+
+(function(){
+  function init(){ try { rfFill(window.RF_INIT || {}); } catch (e) {} }
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); }
+  else { init(); }
+})();
+"""
+
+
 def _workspace_form(ws=None, error="", current_ws=""):
     is_new = ws is None
     g = (lambda a, d="": d if is_new else (getattr(ws, a) or d))
@@ -1344,12 +1498,13 @@ def _workspace_form(ws=None, error="", current_ws=""):
     psel_o = " selected" if provider == "openai" else ""
     psel_g = " selected" if provider == "gemini" else ""
     fb_checked = "checked" if (not is_new and ws.ai_fallback) else ""
+    rf_init = "{}" if is_new else json.dumps(ws.reply_format or {}).replace("</", "<\\/")
     err = f'<div class="card" style="border-color:var(--no);color:var(--no)">{e(error)}</div>' if error else ""
     delbtn = "" if is_new else f"""<form method="post" action="/dashboard/workspaces/{ws.id}/delete" onsubmit="return confirm('Delete this workspace?')" style="display:inline"><button class="btn danger" type="submit">Delete</button></form>"""
     body = f"""
     <a href="/dashboard/workspaces" class="muted small">&larr; Back to workspaces</a>
     <h1>{e(title)}</h1>{err}
-    <form method="post" action="{act}">
+    <form method="post" action="{act}" onsubmit="return rfSerialize();">
       <div class="card">
         <div class="row2">
           <div><label>Workspace name</label><input type="text" name="name" value="{e(name)}" required style="width:100%"></div>
@@ -1385,9 +1540,32 @@ def _workspace_form(ws=None, error="", current_ws=""):
         <p class="muted small" style="margin-top:8px">Blank keys fall back to the global keys set in Settings.</p>
       </div>
       <div class="card"><h3>Client profile (JSON)</h3><textarea name="client_profile">{e(profile)}</textarea></div>
-      <div class="card"><h3>Reply format (JSON)</h3><textarea name="reply_format">{e(rformat)}</textarea></div>
+      <div class="card">
+        <h3>Reply formats</h3>
+        <label>Paste full Reply Format JSON (auto-fills the sections below)</label>
+        <textarea id="rf_paste" style="width:100%;min-height:90px" placeholder="Paste the JSON from your GPT here, then click Fill sections."></textarea>
+        <div style="margin:8px 0"><button type="button" class="btn sec sm" onclick="rfPaste()">Fill sections from JSON</button></div>
+        <div class="row2">
+          <div><label>Format name</label><input id="rf_format_name" type="text" style="width:100%"></div>
+          <div><label>Mode</label><select id="rf_mode" style="width:100%"><option value="reply">reply</option><option value="followup">follow-up</option></select></div>
+        </div>
+        <h3 style="margin-top:18px">Response types</h3>
+        <p class="muted small" style="margin:0 0 8px">One per category of incoming reply. Each has examples, intent, the response template, and its own rules.</p>
+        <div id="rt-list"></div>
+        <button type="button" class="btn sec sm" onclick="addResponseType()">+ Add response type</button>
+        <h3 style="margin-top:18px">Follow-up formats (FUP1–FUP6)</h3>
+        <p class="muted small" style="margin:0 0 8px">In send order. The 1st becomes followup_1, the 2nd followup_2, and so on.</p>
+        <div id="fu-list"></div>
+        <button type="button" class="btn sec sm" onclick="addFollowup()">+ Add follow-up</button>
+        <h3 style="margin-top:18px">Advanced settings (JSON)</h3>
+        <label>placeholders, scheduling_rules, content_rules, global_rules, signature_rule, formatting_rules</label>
+        <textarea id="rf_advanced" style="width:100%;min-height:140px"></textarea>
+        <textarea id="reply_format" name="reply_format" style="display:none">{e(rformat)}</textarea>
+      </div>
       <div class="flex"><button class="btn" type="submit">Save</button></div>
     </form>
+    <script>window.RF_INIT = {rf_init};</script>
+    <script>{WORKSPACE_FORM_JS}</script>
     <div class="flex" style="margin-top:12px">{delbtn}</div>
     """
     return layout(title, "workspaces", body, current_ws=current_ws)
