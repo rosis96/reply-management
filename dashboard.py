@@ -730,6 +730,7 @@ def layout(title, active, body, current_ws="", with_drawer=False):
         ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
         ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
         ("rules", "Rules", "rule", "/dashboard/rules", None, False),
+        ("test", "Test thread", "science", "/dashboard/test", None, False),
     ]
     manage_nav = [
         ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
@@ -1676,6 +1677,118 @@ async def rules_save(request: Request, _: str = Depends(require_login)):
     form = await request.form()
     db.set_setting("ai_rules", form.get("ai_rules", ""))
     return RedirectResponse("/dashboard/rules?saved=1", status_code=303)
+
+
+# -------------------------
+# Test thread (sandbox — generates a reply, never sends or touches Bison/Instantly)
+# -------------------------
+
+def _test_action_badge(action):
+    if action == "send":
+        return pill("Would auto-send", "ok")
+    if action == "stop":
+        return pill("Would stop (no reply)", "no")
+    return pill("Would draft for review", "warn")
+
+
+def _test_result_html(ai, action, mode):
+    intent = ai.get("intent", "")
+    conf = ai.get("confidence", "")
+    explain = {
+        "send": "This reply matches an auto-send type, so the system would send it automatically.",
+        "skip_enrich": "The system would NOT auto-send this. It drafts it into Needs Review for you to check and hit send, and still loads the follow-ups.",
+        "stop": "The system would do nothing (opt-out, out-of-office, automated, or wrong person).",
+    }.get(action, "")
+    main_reply = ai.get("main_reply", "") or "(empty)"
+    fups = ""
+    for i in range(1, 9):
+        v = ai.get(f"followup_{i}", "")
+        if v:
+            fups += (f'<div class="fup"><div class="step">Follow-up {i}</div>'
+                     f'<div style="white-space:pre-wrap;line-height:1.6">{e(v)}</div></div>')
+    if not fups:
+        fups = '<p class="muted small">No follow-ups generated.</p>'
+    return f"""
+    <div class="card">
+      <h3>Result</h3>
+      <div class="flex" style="gap:10px;margin-bottom:6px">
+        {_test_action_badge(action)} {pill("intent: " + e(str(intent) or "—"), "blue")} {pill("confidence: " + e(str(conf) or "—"), "muted")} {pill("mode: " + e(mode), "muted")}
+      </div>
+      <p class="muted small">{e(explain)}</p>
+    </div>
+    <div class="card">
+      <h3>Main reply</h3>
+      <div style="white-space:pre-wrap;line-height:1.6">{e(main_reply)}</div>
+    </div>
+    <div class="card">
+      <h3>Follow-ups</h3>
+      {fups}
+    </div>
+    """
+
+
+def _test_page(selected_ws="", thread_text="", result_html="", current_ws=""):
+    try:
+        workspaces = db.list_workspaces()
+    except Exception:
+        workspaces = []
+    opts = ""
+    for w in workspaces:
+        sel = " selected" if w.name == selected_ws else ""
+        opts += f'<option value="{e(w.name)}"{sel}>{e(w.name)} ({e(w.platform)}/{e(w.mode or "reply")})</option>'
+    body = f"""
+    <h1>Test thread</h1>
+    <p class="sub">Paste an example email thread and generate the reply + follow-ups exactly as the system would for a real lead. Nothing is sent, saved, or pushed to EmailBison / Instantly.</p>
+    <form method="post" action="/dashboard/test">
+      <div class="card">
+        <label>Workspace (uses its client profile, reply format, AI provider)</label>
+        <select name="workspace" style="width:100%" required>{opts}</select>
+        <label>Email thread (paste the conversation — the prospect's latest reply matters most)</label>
+        <textarea name="thread" style="width:100%;min-height:220px" placeholder="Paste the full thread here...">{e(thread_text)}</textarea>
+      </div>
+      <button class="btn" type="submit">Generate reply</button>
+    </form>
+    {result_html}
+    """
+    return layout("Test thread", "test", body, current_ws=current_ws)
+
+
+@router.get("/dashboard/test", response_class=HTMLResponse)
+def test_page(request: Request, _: str = Depends(require_login)):
+    return HTMLResponse(_test_page(current_ws=request.cookies.get("ws", "")))
+
+
+@router.post("/dashboard/test", response_class=HTMLResponse)
+async def test_generate(request: Request, _: str = Depends(require_login)):
+    form = await request.form()
+    ws_name = (form.get("workspace", "") or "").strip()
+    thread_text = (form.get("thread", "") or "").strip()
+    current_ws = request.cookies.get("ws", "")
+
+    if not ws_name or not thread_text:
+        err = '<div class="card" style="border-color:var(--no);color:var(--no)">Pick a workspace and paste a thread.</div>'
+        return HTMLResponse(_test_page(ws_name, thread_text, err, current_ws))
+
+    cfg = db.get_workspace_config(ws_name)
+    if not cfg:
+        err = '<div class="card" style="border-color:var(--no);color:var(--no)">Workspace not found.</div>'
+        return HTMLResponse(_test_page(ws_name, thread_text, err, current_ws))
+
+    try:
+        import main  # lazy import so the dashboard can load even if main has issues
+        ai_cfg = main.build_ai_cfg(cfg)
+        thread = [{"type": "reply", "body": thread_text}]
+        mode = cfg.get("mode", "reply")
+        # No scheduling_context on purpose: testing must not reserve real Calendly slots.
+        ai = main.generate_ai_reply(
+            cfg.get("client_profile", {}), cfg.get("reply_format", {}),
+            thread, mode=mode, scheduling_context="", ai_cfg=ai_cfg)
+        action = "send" if mode == "followup" else main.decide_reply_action(ai, cfg.get("reply_format", {}))
+        result_html = _test_result_html(ai, action, mode)
+    except Exception as ex:
+        result_html = f'<div class="card" style="border-color:var(--no);color:var(--no)">Generation failed: {e(str(ex))}</div>'
+
+    return HTMLResponse(_test_page(ws_name, thread_text, result_html, current_ws))
 
 
 # -------------------------
