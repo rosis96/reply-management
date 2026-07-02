@@ -1691,9 +1691,21 @@ def _test_action_badge(action):
     return pill("Would draft for review", "warn")
 
 
-def _test_result_html(ai, action, mode):
+def _test_result_html(ai, action, mode, provider="", failed=False):
     intent = ai.get("intent", "")
     conf = ai.get("confidence", "")
+    if failed:
+        return f"""
+    <div class="card" style="border-color:var(--no)">
+      <h3 style="color:var(--no)">The AI did not generate a reply</h3>
+      <p class="muted small">Your thread is fine — the model itself returned nothing, so the system fell back to human review. This is almost always the AI key or quota.</p>
+      <p style="margin:10px 0 0"><b>Provider used:</b> {e(provider or "?")}</p>
+      <ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;font-size:13px">
+        <li>If provider is <b>gemini</b>: set a valid <b>Gemini API key</b> in Settings (or on this workspace).</li>
+        <li>If provider is <b>openai</b>: check the OpenAI key and that the account has quota/credits.</li>
+        <li>Tick <b>Auto-fallback</b> on the workspace so it tries the other provider if one fails.</li>
+      </ul>
+    </div>"""
     explain = {
         "send": "This reply matches an auto-send type, so the system would send it automatically.",
         "skip_enrich": "The system would NOT auto-send this. It drafts it into Needs Review for you to check and hit send, and still loads the follow-ups.",
@@ -1784,7 +1796,11 @@ async def test_generate(request: Request, _: str = Depends(require_login)):
             cfg.get("client_profile", {}), cfg.get("reply_format", {}),
             thread, mode=mode, scheduling_context="", ai_cfg=ai_cfg)
         action = "send" if mode == "followup" else main.decide_reply_action(ai, cfg.get("reply_format", {}))
-        result_html = _test_result_html(ai, action, mode)
+        # Detect the "model didn't run" fallback so we don't show a misleading "would stop".
+        failed = (str(ai.get("intent", "")) == "human_review"
+                  and ai.get("human_review_needed") is True
+                  and not (ai.get("main_reply") or "").strip())
+        result_html = _test_result_html(ai, action, mode, provider=ai_cfg.get("provider", ""), failed=failed)
     except Exception as ex:
         result_html = f'<div class="card" style="border-color:var(--no);color:var(--no)">Generation failed: {e(str(ex))}</div>'
 
