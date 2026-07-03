@@ -1032,6 +1032,7 @@ def _call_llm(prompt, system_msg, ai_cfg=None):
 
 def _call_openai(prompt, system_msg, api_key="", model="gpt-4.1"):
     """Return a dict on success, or None on total failure (so _call_llm can fall back)."""
+    model = (model or "gpt-4.1").strip().lower()  # API ids are lowercase; forgive "GPT-4o" etc.
     try:
         client = OpenAI(api_key=api_key) if api_key else get_openai_client()
     except Exception as e:
@@ -1065,8 +1066,9 @@ def _call_gemini(prompt, system_msg, api_key="", model="gemini-2.5-pro"):
         log("Gemini has no API key set (workspace or global).")
         return None
 
+    model = (model or "gemini-2.5-pro").strip().lower()  # forgive stray caps/spaces
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{model or 'gemini-2.5-pro'}:generateContent")
+           f"{model}:generateContent")
     body = {
         "systemInstruction": {"parts": [{"text": system_msg}]},
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -1224,6 +1226,29 @@ def send_reply_to_bison(reply_id, message, sender_email_id, to_name, to_email, a
     return response.json()
 
 
+def fetch_bison_lead_custom_vars(lead_id, api_key, base_url):
+    """Return the lead's existing custom variables as {name: value}. Empty on
+    failure. Used so writing our variables doesn't wipe the others."""
+    try:
+        r = requests.get(f"{base_url}/api/leads/{lead_id}",
+                         headers=bison_headers(api_key), timeout=15)
+        if r.status_code not in (200, 201):
+            return {}
+        lead = r.json().get("data", r.json())
+        cv = lead.get("custom_variables") if isinstance(lead, dict) else None
+        out = {}
+        if isinstance(cv, dict):
+            out = {k: v for k, v in cv.items()}
+        elif isinstance(cv, list):
+            for item in cv:
+                if isinstance(item, dict) and "name" in item:
+                    out[item["name"]] = item.get("value", "")
+        return out
+    except Exception as ex:
+        log(f"Could not fetch existing Bison custom vars: {ex}")
+        return {}
+
+
 def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key, base_url):
     url = f"{base_url}/api/leads/{lead_id}"
 
@@ -1234,24 +1259,30 @@ def update_bison_lead_variables(lead_id, ai_result, latest_reply, api_key, base_
     last_name = name_parts[1] if len(name_parts) > 1 and name_parts[1] else "Unknown"
     email = latest_reply.get("from_email_address", "")
 
-    custom_vars = [
-        {"name": "main_reply", "value": ai_result.get("main_reply", "")},
-        {"name": "followup_1", "value": ai_result.get("followup_1", "")},
-        {"name": "followup_2", "value": ai_result.get("followup_2", "")},
-        {"name": "followup_3", "value": ai_result.get("followup_3", "")},
-        {"name": "followup_4", "value": ai_result.get("followup_4", "")},
-        {"name": "followup_5", "value": ai_result.get("followup_5", "")},
-        {"name": "followup_6", "value": ai_result.get("followup_6", "")},
-    ]
+    # Bison's PUT REPLACES the whole custom_variables set, so start from the
+    # lead's EXISTING variables and overlay ours — otherwise company, # employees,
+    # category, etc. would be wiped out.
+    merged = fetch_bison_lead_custom_vars(lead_id, api_key, base_url)
+
+    our_vars = {
+        "main_reply": ai_result.get("main_reply", ""),
+        "followup_1": ai_result.get("followup_1", ""),
+        "followup_2": ai_result.get("followup_2", ""),
+        "followup_3": ai_result.get("followup_3", ""),
+        "followup_4": ai_result.get("followup_4", ""),
+        "followup_5": ai_result.get("followup_5", ""),
+        "followup_6": ai_result.get("followup_6", ""),
+        "reply_intent": ai_result.get("intent", ""),
+        "reply_confidence": str(ai_result.get("confidence", "")),
+    }
     # FUP7/FUP8 only when present (follow-up mode), so normal workspaces are unchanged.
     for i in (7, 8):
         val = ai_result.get(f"followup_{i}", "")
         if val:
-            custom_vars.append({"name": f"followup_{i}", "value": val})
-    custom_vars += [
-        {"name": "reply_intent", "value": ai_result.get("intent", "")},
-        {"name": "reply_confidence", "value": str(ai_result.get("confidence", ""))},
-    ]
+            our_vars[f"followup_{i}"] = val
+
+    merged.update(our_vars)  # our generated values win; everything else preserved
+    custom_vars = [{"name": k, "value": v} for k, v in merged.items()]
 
     # EmailBison rejects the WHOLE update if any custom variable doesn't exist
     # on the account. So if it complains about a missing variable, drop that one
