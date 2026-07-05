@@ -713,7 +713,7 @@ def _nav_badge(count, danger=False):
     return f'<span class="{cls}">{count}</span>'
 
 
-def layout(title, active, body, current_ws="", with_drawer=False):
+def layout(title, active, body, current_ws="", with_drawer=False, crm_active=""):
     user = os.getenv("DASHBOARD_USER", "admin")
     initials = (user[:2] or "AD").upper()
 
@@ -736,16 +736,31 @@ def layout(title, active, body, current_ws="", with_drawer=False):
         ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
         ("settings", "Settings", "settings", "/dashboard/settings", None, False),
         ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
+        ("crm", "CRM", "space_dashboard", "/crm", None, False),
+    ]
+    crm_nav = [
+        ("board", "Pipeline", "view_kanban", "/crm", None, False),
+        ("list", "List view", "list", "/crm/list", None, False),
+        ("stages", "Stages & tags", "tune", "/crm/stages", None, False),
     ]
 
-    def nav_links(items):
+    def nav_links(items, active_key):
         out = ""
         for key, label, ic, href, badge, danger in items:
-            cls = "active" if key == active else ""
+            cls = "active" if key == active_key else ""
             out += (f'<a class="{cls}" href="{href}">'
                     f'<span class="material-symbols-outlined">{ic}</span>'
                     f'<span class="nlbl">{e(label)}</span>{_nav_badge(badge, danger)}</a>')
         return out
+
+    if crm_active:
+        sidebar_nav = (f'<a class="lnav-logout" href="/dashboard" style="margin-bottom:8px">'
+                       f'<span class="material-symbols-outlined">arrow_back</span>'
+                       f'<span class="nlbl">Back to Replies</span></a>'
+                       f'<div class="lsec">CRM</div><nav class="lnav">{nav_links(crm_nav, crm_active)}</nav>')
+    else:
+        sidebar_nav = (f'<div class="lsec">Replies</div><nav class="lnav">{nav_links(replies_nav, active)}</nav>'
+                       f'<div class="lsec">Manage</div><nav class="lnav">{nav_links(manage_nav, active)}</nav>')
 
     drawer = ""
     if with_drawer:
@@ -771,10 +786,7 @@ def layout(title, active, body, current_ws="", with_drawer=False):
 <div class="app">
   <aside class="lsidebar">
     <div class="lbrand"><span class="chip">A</span><span>Ascendly</span></div>
-    <div class="lsec">Replies</div>
-    <nav class="lnav">{nav_links(replies_nav)}</nav>
-    <div class="lsec">Manage</div>
-    <nav class="lnav">{nav_links(manage_nav)}</nav>
+    {sidebar_nav}
     <div class="lspacer"></div>
     <a class="lnav-logout" href="/dashboard/logout"><span class="material-symbols-outlined">logout</span><span class="nlbl">Logout</span></a>
     <div class="luser"><div class="avatar">{e(initials)}</div><div><div class="lu-nm">{e(user)}</div><div class="lu-ws">{e(current_ws or "All workspaces")}</div></div></div>
@@ -1194,14 +1206,33 @@ async def lead_action(lead_id: int, request: Request, _: str = Depends(require_l
         db.update_lead_fields(lead_id, reviewed=True)
     elif action == "mark_booked":
         db.update_lead_fields(lead_id, stage="booked", reviewed=True)
+        _crm_sync_booked(ld)
     elif action == "set_stage":
         st = form.get("stage", "")
         if st:
             db.update_lead_fields(lead_id, stage=st)
+            if st == "booked":
+                _crm_sync_booked(ld)
     elif action == "delete":
         db.delete_leads([lead_id])
 
     return JSONResponse({"ok": True})
+
+
+def _crm_sync_booked(ld):
+    """When a lead is marked Meeting Booked, auto-create a CRM opportunity
+    (de-duped). Never raises — the reply system must not be affected."""
+    try:
+        db.upsert_opportunity_from_lead(
+            workspace_name=ld.workspace_name or "",
+            lead_id=(ld.external_lead_id or str(ld.id)),
+            contact_name=ld.name or "",
+            email=ld.email or "",
+            company=ld.company or "",
+            lead_intent=ld.intent or "",
+        )
+    except Exception:
+        pass
 
 
 @router.post("/dashboard/leads/{lead_id}/send")
@@ -1272,6 +1303,10 @@ async def bulk(request: Request, _: str = Depends(require_login)):
             db.bulk_update_leads(ids, action="stop", stage="stopped", reviewed=True)
         elif action == "mark_booked":
             db.bulk_update_leads(ids, stage="booked", reviewed=True)
+            for _id in ids:
+                _ld = db.get_lead(_id)
+                if _ld is not None:
+                    _crm_sync_booked(_ld)
         elif action == "delete":
             db.delete_leads(ids)
     return RedirectResponse("/dashboard", status_code=303)

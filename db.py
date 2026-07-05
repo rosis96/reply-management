@@ -160,6 +160,61 @@ class ProposedSlot(Base):
 
 
 # -------------------------
+# CRM models (separate section — does not touch the reply pipeline)
+# -------------------------
+
+class CrmStage(Base):
+    __tablename__ = "crm_stages"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), default="")
+    color = Column(String(20), default="#64748b")
+    sort_order = Column(Integer, default=0)
+    is_won = Column(Boolean, default=False)
+    is_lost = Column(Boolean, default=False)
+
+
+class CrmTag(Base):
+    __tablename__ = "crm_tags"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), default="")
+    color = Column(String(20), default="#7857f8")
+
+
+class Opportunity(Base):
+    __tablename__ = "opportunities"
+    id = Column(Integer, primary_key=True)
+    workspace_name = Column(String(255), default="")
+    lead_id = Column(String(255), default="")          # external lead id (Bison/Instantly)
+    deal_name = Column(String(255), default="")
+    contact_name = Column(String(255), default="")
+    email = Column(String(255), default="")
+    company = Column(String(255), default="")
+    website = Column(String(512), default="")
+    stage_id = Column(Integer, default=None)
+    lead_intent = Column(String(120), default="")
+    status = Column(String(120), default="")
+    value = Column(Float, default=0.0)
+    owner = Column(String(255), default="")
+    description = Column(Text, default="")
+    next_action_date = Column(String(40), default="")
+    tag_ids = Column(Text, default="")                 # JSON list of CrmTag ids
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    stage_changed_at = Column(DateTime, default=datetime.utcnow)
+
+
+DEFAULT_CRM_STAGES = [
+    ("Opportunity", "#64748b", False, False),
+    ("Meeting Booked", "#2563eb", False, False),
+    ("Meeting Completed", "#7857f8", False, False),
+    ("No Show", "#d97706", False, False),
+    ("Follow-up", "#ea580c", False, False),
+    ("Won", "#137333", True, False),
+    ("Lost", "#ba1a1a", False, True),
+]
+
+
+# -------------------------
 # Init + seed
 # -------------------------
 
@@ -781,5 +836,246 @@ def bulk_update_leads(ids, **fields):
             count += 1
         session.commit()
         return count
+    finally:
+        session.close()
+
+
+# -------------------------
+# CRM helpers
+# -------------------------
+
+def seed_crm_if_empty():
+    session = SessionLocal()
+    try:
+        if session.query(CrmStage).count() == 0:
+            for i, (name, color, won, lost) in enumerate(DEFAULT_CRM_STAGES):
+                session.add(CrmStage(name=name, color=color, sort_order=i,
+                                     is_won=won, is_lost=lost))
+            session.commit()
+    finally:
+        session.close()
+
+
+def list_stages():
+    session = SessionLocal()
+    try:
+        return session.query(CrmStage).order_by(CrmStage.sort_order, CrmStage.id).all()
+    finally:
+        session.close()
+
+
+def get_stage(stage_id):
+    session = SessionLocal()
+    try:
+        return session.get(CrmStage, int(stage_id))
+    finally:
+        session.close()
+
+
+def save_stage(stage_id, data):
+    session = SessionLocal()
+    try:
+        st = session.get(CrmStage, int(stage_id)) if stage_id else None
+        if st is None:
+            st = CrmStage()
+            session.add(st)
+            # place new stage at the end
+            mx = session.query(CrmStage).count()
+            st.sort_order = mx
+        if "name" in data:
+            st.name = (data.get("name") or "").strip()
+        if "color" in data:
+            st.color = (data.get("color") or "#64748b").strip()
+        if "sort_order" in data:
+            try:
+                st.sort_order = int(data["sort_order"])
+            except (TypeError, ValueError):
+                pass
+        if "is_won" in data:
+            st.is_won = bool(data["is_won"])
+        if "is_lost" in data:
+            st.is_lost = bool(data["is_lost"])
+        session.commit()
+        return st.id
+    finally:
+        session.close()
+
+
+def delete_stage(stage_id):
+    """Delete a stage. Opportunities in it are moved to the first remaining stage."""
+    session = SessionLocal()
+    try:
+        st = session.get(CrmStage, int(stage_id))
+        if st is None:
+            return
+        fallback = (session.query(CrmStage).filter(CrmStage.id != st.id)
+                    .order_by(CrmStage.sort_order, CrmStage.id).first())
+        fb_id = fallback.id if fallback else None
+        session.query(Opportunity).filter(Opportunity.stage_id == st.id)\
+            .update({Opportunity.stage_id: fb_id}, synchronize_session=False)
+        session.delete(st)
+        session.commit()
+    finally:
+        session.close()
+
+
+def list_tags():
+    session = SessionLocal()
+    try:
+        return session.query(CrmTag).order_by(CrmTag.name).all()
+    finally:
+        session.close()
+
+
+def save_tag(tag_id, data):
+    session = SessionLocal()
+    try:
+        t = session.get(CrmTag, int(tag_id)) if tag_id else None
+        if t is None:
+            t = CrmTag()
+            session.add(t)
+        t.name = (data.get("name") or "").strip()
+        t.color = (data.get("color") or "#7857f8").strip()
+        session.commit()
+        return t.id
+    finally:
+        session.close()
+
+
+def delete_tag(tag_id):
+    session = SessionLocal()
+    try:
+        t = session.get(CrmTag, int(tag_id))
+        if t is not None:
+            session.delete(t)
+            session.commit()
+    finally:
+        session.close()
+
+
+def list_opportunities(workspace=None, search=None):
+    session = SessionLocal()
+    try:
+        q = session.query(Opportunity)
+        if workspace:
+            q = q.filter(Opportunity.workspace_name == workspace)
+        if search:
+            like = f"%{search.strip()}%"
+            q = q.filter(or_(Opportunity.company.ilike(like),
+                             Opportunity.contact_name.ilike(like),
+                             Opportunity.email.ilike(like),
+                             Opportunity.deal_name.ilike(like)))
+        return q.order_by(Opportunity.updated_at.desc()).all()
+    finally:
+        session.close()
+
+
+def get_opportunity(opp_id):
+    session = SessionLocal()
+    try:
+        return session.get(Opportunity, int(opp_id))
+    finally:
+        session.close()
+
+
+_OPP_FIELDS = ("workspace_name", "lead_id", "deal_name", "contact_name", "email",
+               "company", "website", "lead_intent", "status", "owner",
+               "description", "next_action_date", "tag_ids")
+
+
+def save_opportunity(opp_id, data):
+    session = SessionLocal()
+    try:
+        opp = session.get(Opportunity, int(opp_id)) if opp_id else None
+        if opp is None:
+            opp = Opportunity()
+            session.add(opp)
+            # default stage = first
+            first = session.query(CrmStage).order_by(CrmStage.sort_order, CrmStage.id).first()
+            opp.stage_id = first.id if first else None
+        for f in _OPP_FIELDS:
+            if f in data:
+                setattr(opp, f, data[f])
+        if "value" in data:
+            try:
+                opp.value = float(data["value"] or 0)
+            except (TypeError, ValueError):
+                opp.value = 0.0
+        if "stage_id" in data and data["stage_id"]:
+            new_stage = int(data["stage_id"])
+            if new_stage != (opp.stage_id or 0):
+                opp.stage_changed_at = datetime.utcnow()
+            opp.stage_id = new_stage
+        session.commit()
+        return opp.id
+    finally:
+        session.close()
+
+
+def move_opportunity(opp_id, stage_id):
+    session = SessionLocal()
+    try:
+        opp = session.get(Opportunity, int(opp_id))
+        if opp is None:
+            return False
+        opp.stage_id = int(stage_id)
+        opp.stage_changed_at = datetime.utcnow()
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def delete_opportunity(opp_id):
+    session = SessionLocal()
+    try:
+        opp = session.get(Opportunity, int(opp_id))
+        if opp is not None:
+            session.delete(opp)
+            session.commit()
+    finally:
+        session.close()
+
+
+def opportunity_stage_totals(workspace=None):
+    """Return {stage_id: {'count': n, 'value': sum}} for column headers."""
+    session = SessionLocal()
+    try:
+        q = session.query(Opportunity)
+        if workspace:
+            q = q.filter(Opportunity.workspace_name == workspace)
+        totals = {}
+        for opp in q.all():
+            t = totals.setdefault(opp.stage_id, {"count": 0, "value": 0.0})
+            t["count"] += 1
+            t["value"] += float(opp.value or 0)
+        return totals
+    finally:
+        session.close()
+
+
+def upsert_opportunity_from_lead(workspace_name, lead_id, contact_name="", email="",
+                                 company="", lead_intent="", stage_name="Meeting Booked"):
+    """Create a CRM opportunity for a booked lead. De-dupes by (workspace, lead_id):
+    if one already exists, it is left as-is (returns its id)."""
+    lead_id = str(lead_id or "")
+    session = SessionLocal()
+    try:
+        existing = (session.query(Opportunity)
+                    .filter(Opportunity.workspace_name == workspace_name,
+                            Opportunity.lead_id == lead_id).first())
+        if existing is not None:
+            return existing.id
+        stage = (session.query(CrmStage).filter(CrmStage.name == stage_name).first()
+                 or session.query(CrmStage).order_by(CrmStage.sort_order, CrmStage.id).first())
+        opp = Opportunity(
+            workspace_name=workspace_name, lead_id=lead_id,
+            deal_name=(company or contact_name or "New deal"),
+            contact_name=contact_name, email=email, company=company,
+            lead_intent=lead_intent, stage_id=(stage.id if stage else None),
+        )
+        session.add(opp)
+        session.commit()
+        return opp.id
     finally:
         session.close()

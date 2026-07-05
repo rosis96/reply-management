@@ -13,6 +13,7 @@ from fastapi.responses import RedirectResponse
 
 import db
 from dashboard import router as dashboard_router
+from crm import router as crm_router
 
 load_dotenv()
 
@@ -24,6 +25,7 @@ def _startup():
     db.init_db()
     db.migrate()
     db.seed_if_empty()
+    db.seed_crm_if_empty()
     if db.IS_SQLITE:
         log("DB backend: SQLITE (ephemeral). On Railway this means DATABASE_URL is NOT connected -- data WILL reset on every redeploy. Connect Postgres!")
     else:
@@ -31,6 +33,7 @@ def _startup():
 
 
 app.include_router(dashboard_router)
+app.include_router(crm_router)
 
 DEFAULT_REPLY_DELAY_SECONDS = 420
 REPLY_DELAY_SECONDS = DEFAULT_REPLY_DELAY_SECONDS  # kept for reference / fallback
