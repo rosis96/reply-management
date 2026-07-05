@@ -586,6 +586,19 @@ thead th { background:#faf9fe; color:#56536a; }
 .banner { background:linear-gradient(135deg,#5f3add,#7857f8); box-shadow:0 10px 28px rgba(95,58,221,.28); }
 .banner .bbtn { color:var(--primary); }
 .fup .step { color:var(--primary); }
+
+/* ===== full width + collapsible nav groups ===== */
+.lcontent { max-width:none; }
+.navgroup { margin-bottom:2px; }
+.navgroup-head { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px;
+                 color:#3f3c52; font-weight:700; font-size:13px; cursor:pointer; user-select:none; }
+.navgroup-head:hover { background:#e6e1f4; }
+.navgroup-head > .material-symbols-outlined { font-size:20px; color:#6f6b82; }
+.navgroup-head .car { margin-left:auto; font-size:18px; transition:transform .15s; color:#9a95ad; }
+.navgroup.open .navgroup-head .car { transform:rotate(90deg); }
+.navgroup-body { display:none; padding:2px 0 6px 6px; }
+.navgroup.open .navgroup-body { display:block; }
+.navgroup-body .lnav a { font-size:13px; padding:8px 10px; }
 """
 
 # (icon_key, tooltip, href, active_key)
@@ -723,28 +736,37 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
         counts = {"total": 0, "needs_review": 0, "replied": 0, "booked": 0, "stopped": 0}
 
     # (key, label, icon, href, badge_count, danger)
-    replies_nav = [
-        ("all", "All Replies", "dashboard", "/dashboard", counts.get("total", 0), False),
-        ("needs_review", "Needs Review", "flag", "/dashboard?status=needs_review", counts.get("needs_review", 0), True),
-        ("replied", "Replied", "reply", "/dashboard?status=replied", counts.get("replied", 0), False),
-        ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
-        ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
-        ("rules", "Rules", "rule", "/dashboard/rules", None, False),
-        ("test", "Test thread", "science", "/dashboard/test", None, False),
+    nav_groups = [
+        ("Outbound", "campaign", [
+            ("all", "All Replies", "dashboard", "/dashboard", counts.get("total", 0), False),
+            ("needs_review", "Needs Review", "flag", "/dashboard?status=needs_review", counts.get("needs_review", 0), True),
+            ("replied", "Replied", "reply", "/dashboard?status=replied", counts.get("replied", 0), False),
+            ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
+            ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
+            ("rules", "Rules", "rule", "/dashboard/rules", None, False),
+            ("test", "Test thread", "science", "/dashboard/test", None, False),
+        ]),
+        ("Inbound", "call_received", [
+            ("inbound", "Website leads", "language", "/dashboard/soon?name=Inbound+leads", None, False),
+            ("inbound_forms", "Forms", "dynamic_form", "/dashboard/soon?name=Inbound+forms", None, False),
+        ]),
+        ("CRM", "space_dashboard", [
+            ("crm_board", "Pipeline", "view_kanban", "/crm", None, False),
+            ("crm_list", "List view", "list", "/crm/list", None, False),
+            ("crm_contacts", "Contacts", "contacts", "/crm/contacts", None, False),
+            ("crm_activities", "Activities", "event_note", "/crm/activities", None, False),
+            ("crm_reports", "Reports", "insights", "/crm/reports", None, False),
+            ("crm_stages", "Stages & tags", "tune", "/crm/stages", None, False),
+        ]),
+        ("Manage", "settings", [
+            ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
+            ("settings", "Settings", "settings", "/dashboard/settings", None, False),
+            ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
+        ]),
     ]
-    manage_nav = [
-        ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
-        ("settings", "Settings", "settings", "/dashboard/settings", None, False),
-        ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
-        ("crm", "CRM", "space_dashboard", "/crm", None, False),
-    ]
-    crm_nav = [
-        ("board", "Pipeline", "view_kanban", "/crm", None, False),
-        ("list", "List view", "list", "/crm/list", None, False),
-        ("stages", "Stages & tags", "tune", "/crm/stages", None, False),
-    ]
+    active_key = crm_active or active
 
-    def nav_links(items, active_key):
+    def nav_links(items):
         out = ""
         for key, label, ic, href, badge, danger in items:
             cls = "active" if key == active_key else ""
@@ -753,14 +775,16 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
                     f'<span class="nlbl">{e(label)}</span>{_nav_badge(badge, danger)}</a>')
         return out
 
-    if crm_active:
-        sidebar_nav = (f'<a class="lnav-logout" href="/dashboard" style="margin-bottom:8px">'
-                       f'<span class="material-symbols-outlined">arrow_back</span>'
-                       f'<span class="nlbl">Back to Replies</span></a>'
-                       f'<div class="lsec">CRM</div><nav class="lnav">{nav_links(crm_nav, crm_active)}</nav>')
-    else:
-        sidebar_nav = (f'<div class="lsec">Replies</div><nav class="lnav">{nav_links(replies_nav, active)}</nav>'
-                       f'<div class="lsec">Manage</div><nav class="lnav">{nav_links(manage_nav, active)}</nav>')
+    any_open = any(any(it[0] == active_key for it in items) for _, _, items in nav_groups)
+    sidebar_nav = ""
+    for gi, (glabel, gicon, items) in enumerate(nav_groups):
+        is_open = any(it[0] == active_key for it in items) or (not any_open and gi == 0)
+        sidebar_nav += (
+            f'<div class="navgroup {"open" if is_open else ""}">'
+            f'<div class="navgroup-head" onclick="this.parentNode.classList.toggle(\'open\')">'
+            f'<span class="material-symbols-outlined">{gicon}</span>{glabel}'
+            f'<span class="material-symbols-outlined car">chevron_right</span></div>'
+            f'<div class="navgroup-body"><nav class="lnav">{nav_links(items)}</nav></div></div>')
 
     drawer = ""
     if with_drawer:

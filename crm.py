@@ -31,6 +31,19 @@ def _money(v):
     return "$" + format(int(round(v)), ",")
 
 
+MEETING_OUTCOMES = ["", "Positive — moving forward", "Needs follow-up", "Proposal requested",
+                    "No show", "Not a fit", "On hold"]
+
+
+def _outcome_opts(current):
+    out = ""
+    for o in MEETING_OUTCOMES:
+        sel = " selected" if o == (current or "") else ""
+        label = o or "—"
+        out += f'<option value="{e(o)}"{sel}>{e(label)}</option>'
+    return out
+
+
 def _tag_map():
     return {t.id: t for t in db.list_tags()}
 
@@ -212,7 +225,7 @@ def crm_board(request: Request, workspace: str = None, synced: str = "", _: str 
     {CRM_JS}
     """
     return HTMLResponse(layout("CRM Pipeline", "", body,
-                               current_ws=request.cookies.get("ws", ""), crm_active="board"))
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_board"))
 
 
 # -------------------------
@@ -259,7 +272,7 @@ def crm_list(request: Request, workspace: str = None, q: str = "", _: str = Depe
     {CRM_JS}
     """
     return HTMLResponse(layout("CRM Opportunities", "", body,
-                               current_ws=request.cookies.get("ws", ""), crm_active="list"))
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_list"))
 
 
 # -------------------------
@@ -328,7 +341,16 @@ def opp_form(opp_id: str = "", stage_id: str = "", _: str = Depends(require_logi
         <div><label>Next action date</label><input type="date" name="next_action_date" value="{e(val('next_action_date'))}" style="width:100%"></div>
       </div>
       <label>Website</label><input type="text" name="website" value="{e(val('website'))}" style="width:100%">
-      <label>Lead intent</label><input type="text" name="lead_intent" value="{e(val('lead_intent'))}" style="width:100%">
+      <div style="border-top:1px solid var(--line);margin:14px 0 4px;padding-top:10px;font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Post-meeting</div>
+      <div class="row2">
+        <div><label>Meeting outcome</label><select name="meeting_outcome" style="width:100%">{_outcome_opts(val('meeting_outcome'))}</select></div>
+        <div><label>Est. close date</label><input type="date" name="close_date" value="{e(val('close_date'))}" style="width:100%"></div>
+      </div>
+      <label>Next step</label><input type="text" name="next_step" value="{e(val('next_step'))}" placeholder="e.g. send proposal, follow up Tuesday" style="width:100%">
+      <div class="row2">
+        <div><label>Original source</label><input type="text" name="source" value="{e(val('source'))}" placeholder="e.g. Outbound, Referral" style="width:100%"></div>
+        <div><label>Lead intent</label><input type="text" name="lead_intent" value="{e(val('lead_intent'))}" style="width:100%"></div>
+      </div>
       <label>Tags</label><div style="margin-bottom:6px">{tag_boxes}</div>
       <label>Description / notes</label><textarea name="description" style="width:100%;min-height:100px">{e(val('description'))}</textarea>
       <div class="flex" style="margin-top:14px">
@@ -352,6 +374,8 @@ async def opp_save(request: Request, opp_id: str = "", _: str = Depends(require_
         "next_action_date": form.get("next_action_date", ""),
         "lead_intent": form.get("lead_intent", ""), "description": form.get("description", ""),
         "tag_ids": json.dumps([int(t) for t in tag_ids if str(t).isdigit()]),
+        "close_date": form.get("close_date", ""), "source": form.get("source", ""),
+        "next_step": form.get("next_step", ""), "meeting_outcome": form.get("meeting_outcome", ""),
     }
     new_id = db.save_opportunity(opp_id or None, data)
     return JSONResponse({"ok": True, "id": new_id})
@@ -377,6 +401,119 @@ async def opp_move(opp_id: int, request: Request, _: str = Depends(require_login
 def opp_delete(opp_id: int, _: str = Depends(require_login)):
     db.delete_opportunity(opp_id)
     return JSONResponse({"ok": True})
+
+
+# -------------------------
+# Contacts (derived from opportunities)
+# -------------------------
+
+@router.get("/crm/contacts", response_class=HTMLResponse)
+def crm_contacts(request: Request, workspace: str = None, q: str = "", _: str = Depends(require_login)):
+    if workspace is None:
+        workspace = request.cookies.get("ws", "")
+    stages = {s.id: s for s in db.list_stages()}
+    opps = db.list_opportunities(workspace=workspace or None, search=q or None)
+    rows = ""
+    for o in opps:
+        st = stages.get(o.stage_id)
+        stg = (f'<span class="opp-tag" style="background:{e(st.color)}22;color:{e(st.color)}">{e(st.name)}</span>'
+               if st else "—")
+        rows += f"""<tr onclick="openOpp({o.id})" style="cursor:pointer">
+          <td><b>{e(o.contact_name or "—")}</b></td>
+          <td>{e(o.email or "")}</td>
+          <td>{e(o.company or "")}</td>
+          <td>{stg}</td>
+          <td>{_money(o.value)}</td>
+          <td>{e(o.workspace_name or "")}</td>
+        </tr>"""
+    if not rows:
+        rows = '<tr><td colspan="6" class="empty">No contacts yet.</td></tr>'
+    body = f"""
+    {CRM_CSS}
+    <div class="crm-top">
+      <h1>Contacts</h1>
+      <div style="margin-left:auto; display:flex; gap:10px; align-items:center">
+        <form method="get" action="/crm/contacts"><input type="text" name="q" value="{e(q)}" placeholder="Search contact, email, company"></form>
+        {_client_filter(workspace)}
+      </div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Contact</th><th>Email</th><th>Company</th><th>Stage</th><th>Deal value</th><th>Client</th></tr></thead>
+      <tbody>{rows}</tbody></table></div>
+    {_crm_drawer()}
+    {CRM_JS}
+    """
+    return HTMLResponse(layout("CRM Contacts", "", body,
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_contacts"))
+
+
+# -------------------------
+# Reports
+# -------------------------
+
+@router.get("/crm/reports", response_class=HTMLResponse)
+def crm_reports(request: Request, workspace: str = None, _: str = Depends(require_login)):
+    if workspace is None:
+        workspace = request.cookies.get("ws", "")
+    stages = db.list_stages()
+    totals = db.opportunity_stage_totals(workspace=workspace or None)
+    opps = db.list_opportunities(workspace=workspace or None)
+
+    won_val = won_ct = lost_ct = open_val = 0
+    for st in stages:
+        t = totals.get(st.id, {"count": 0, "value": 0})
+        if st.is_won:
+            won_val += t["value"]; won_ct += t["count"]
+        elif st.is_lost:
+            lost_ct += t["count"]
+        else:
+            open_val += t["value"]
+    decided = won_ct + lost_ct
+    win_rate = (won_ct / decided * 100) if decided else 0
+
+    bars = ""
+    maxv = max([totals.get(s.id, {"value": 0})["value"] for s in stages] + [1])
+    for st in stages:
+        t = totals.get(st.id, {"count": 0, "value": 0})
+        w = int((t["value"] / maxv) * 100) if maxv else 0
+        bars += f"""<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px">
+            <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{e(st.color)};margin-right:6px"></span>{e(st.name)}</span>
+            <span class="muted">{t['count']} · {_money(t['value'])}</span></div>
+          <div style="height:9px;background:var(--surf);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:{w}%;background:{e(st.color)};border-radius:99px"></div></div>
+        </div>"""
+
+    def stat(label, val):
+        return f'<div class="stat"><div class="l">{label}</div><div class="n">{val}</div></div>'
+    body = f"""
+    <div class="crm-top"><h1>Reports</h1>
+      <div style="margin-left:auto">{_client_filter(workspace)}</div></div>
+    <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+      {stat("Open pipeline", _money(open_val))}
+      {stat("Won revenue", _money(won_val))}
+      {stat("Win rate", f"{win_rate:.0f}%")}
+      {stat("Total deals", len(opps))}
+    </div>
+    <div class="card" style="margin-top:16px"><h3>Pipeline by stage</h3>{bars}</div>
+    """
+    return HTMLResponse(layout("CRM Reports", "", body,
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_reports"))
+
+
+# -------------------------
+# Activities (placeholder — activity timeline coming next)
+# -------------------------
+
+@router.get("/crm/activities", response_class=HTMLResponse)
+def crm_activities(request: Request, _: str = Depends(require_login)):
+    body = """
+    <h1>Activities</h1>
+    <p class="sub">A timeline of calls, notes, and tasks across your deals.</p>
+    <div class="empty">🗓️ Activity timeline is coming next — it will log every stage change, note, and task per opportunity.</div>
+    """
+    return HTMLResponse(layout("CRM Activities", "", body,
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_activities"))
 
 
 # -------------------------
@@ -430,7 +567,7 @@ def stages_page(request: Request, _: str = Depends(require_login)):
     </div>
     """
     return HTMLResponse(layout("CRM Stages", "", body,
-                               current_ws=request.cookies.get("ws", ""), crm_active="stages"))
+                               current_ws=request.cookies.get("ws", ""), crm_active="crm_stages"))
 
 
 @router.post("/crm/stages/save")

@@ -198,6 +198,11 @@ class Opportunity(Base):
     description = Column(Text, default="")
     next_action_date = Column(String(40), default="")
     tag_ids = Column(Text, default="")                 # JSON list of CrmTag ids
+    # post-meeting flow fields
+    close_date = Column(String(40), default="")        # estimated close date
+    source = Column(String(120), default="")           # original source
+    next_step = Column(Text, default="")               # the agreed next action
+    meeting_outcome = Column(String(60), default="")   # outcome of the meeting
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     stage_changed_at = Column(DateTime, default=datetime.utcnow)
@@ -244,6 +249,22 @@ def migrate():
                         conn.execute(text(f"ALTER TABLE workspaces ADD COLUMN {col} {coltype}"))
                     except Exception:
                         pass
+    except Exception:
+        pass
+
+    # opportunities table additions (CRM post-meeting fields)
+    try:
+        if inspect(engine).has_table("opportunities"):
+            opp_cols = {c["name"] for c in inspect(engine).get_columns("opportunities")}
+            opp_adds = {"close_date": "VARCHAR(40)", "source": "VARCHAR(120)",
+                        "next_step": "TEXT", "meeting_outcome": "VARCHAR(60)"}
+            with engine.begin() as conn:
+                for col, coltype in opp_adds.items():
+                    if col not in opp_cols:
+                        try:
+                            conn.execute(text(f"ALTER TABLE opportunities ADD COLUMN {col} {coltype}"))
+                        except Exception:
+                            pass
     except Exception:
         pass
 
@@ -980,7 +1001,8 @@ def get_opportunity(opp_id):
 
 _OPP_FIELDS = ("workspace_name", "lead_id", "deal_name", "contact_name", "email",
                "company", "website", "lead_intent", "status", "owner",
-               "description", "next_action_date", "tag_ids")
+               "description", "next_action_date", "tag_ids",
+               "close_date", "source", "next_step", "meeting_outcome")
 
 
 def save_opportunity(opp_id, data):
