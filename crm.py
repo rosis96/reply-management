@@ -149,8 +149,12 @@ def _client_filter(current):
 # -------------------------
 
 @router.get("/crm", response_class=HTMLResponse)
-def crm_board(request: Request, workspace: str = "", _: str = Depends(require_login)):
+def crm_board(request: Request, workspace: str = "", synced: str = "", _: str = Depends(require_login)):
     db.seed_crm_if_empty()
+    sync_msg = ""
+    if synced != "":
+        sync_msg = (f'<div class="card" style="border-color:var(--ok);color:var(--ok);margin-bottom:12px">'
+                    f'Synced {e(synced)} booked lead(s) into the pipeline.</div>')
     stages = db.list_stages()
     opps = db.list_opportunities(workspace=workspace or None)
     totals = db.opportunity_stage_totals(workspace=workspace or None)
@@ -193,9 +197,13 @@ def crm_board(request: Request, workspace: str = "", _: str = Depends(require_lo
       <span class="muted small">{len(opps)} opportunities · {_money(grand)} total</span>
       <div style="margin-left:auto; display:flex; gap:10px; align-items:center">
         {_client_filter(workspace)}
+        <form method="post" action="/crm/sync-booked" style="display:inline">
+          <button class="btn sec" type="submit" title="Import all leads currently in Meeting Booked">Sync booked leads</button>
+        </form>
         <button class="btn" onclick="newOpp('')">+ Add opportunity</button>
       </div>
     </div>
+    {sync_msg}
     <div class="crm-board">{cols}</div>
     {_crm_drawer()}
     {CRM_JS}
@@ -342,6 +350,12 @@ async def opp_save(request: Request, opp_id: str = "", _: str = Depends(require_
     }
     new_id = db.save_opportunity(opp_id or None, data)
     return JSONResponse({"ok": True, "id": new_id})
+
+
+@router.post("/crm/sync-booked")
+def crm_sync_booked(_: str = Depends(require_login)):
+    count = db.backfill_opportunities_from_booked()
+    return RedirectResponse(f"/crm?synced={count}", status_code=303)
 
 
 @router.post("/crm/opp/{opp_id}/move")

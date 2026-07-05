@@ -1054,6 +1054,34 @@ def opportunity_stage_totals(workspace=None):
         session.close()
 
 
+def backfill_opportunities_from_booked():
+    """One-time catch-up: create CRM opportunities for every existing lead whose
+    stage is 'booked' that doesn't already have one. Returns the count created."""
+    session = SessionLocal()
+    try:
+        leads = session.query(Lead).filter(Lead.stage == "booked").all()
+        existing = {(o.workspace_name or "", o.lead_id or "")
+                    for o in session.query(Opportunity).all()}
+        stage = (session.query(CrmStage).filter(CrmStage.name == "Meeting Booked").first()
+                 or session.query(CrmStage).order_by(CrmStage.sort_order, CrmStage.id).first())
+        created = 0
+        for ld in leads:
+            key = (ld.workspace_name or "", ld.external_lead_id or str(ld.id))
+            if key in existing:
+                continue
+            session.add(Opportunity(
+                workspace_name=key[0], lead_id=key[1],
+                deal_name=(ld.company or ld.name or "New deal"),
+                contact_name=ld.name or "", email=ld.email or "", company=ld.company or "",
+                lead_intent=ld.intent or "", stage_id=(stage.id if stage else None)))
+            existing.add(key)
+            created += 1
+        session.commit()
+        return created
+    finally:
+        session.close()
+
+
 def upsert_opportunity_from_lead(workspace_name, lead_id, contact_name="", email="",
                                  company="", lead_intent="", stage_name="Meeting Booked"):
     """Create a CRM opportunity for a booked lead. De-dupes by (workspace, lead_id):
