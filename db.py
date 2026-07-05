@@ -1054,12 +1054,16 @@ def opportunity_stage_totals(workspace=None):
         session.close()
 
 
-def backfill_opportunities_from_booked():
+def backfill_opportunities_from_booked(workspace=None):
     """One-time catch-up: create CRM opportunities for every existing lead whose
-    stage is 'booked' that doesn't already have one. Returns the count created."""
+    stage is 'booked' that doesn't already have one. Optionally scoped to one
+    workspace. Returns the count created."""
     session = SessionLocal()
     try:
-        leads = session.query(Lead).filter(Lead.stage == "booked").all()
+        q = session.query(Lead).filter(Lead.stage == "booked")
+        if workspace:
+            q = q.filter(Lead.workspace_name == workspace)
+        leads = q.all()
         existing = {(o.workspace_name or "", o.lead_id or "")
                     for o in session.query(Opportunity).all()}
         stage = (session.query(CrmStage).filter(CrmStage.name == "Meeting Booked").first()

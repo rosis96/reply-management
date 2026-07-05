@@ -149,8 +149,10 @@ def _client_filter(current):
 # -------------------------
 
 @router.get("/crm", response_class=HTMLResponse)
-def crm_board(request: Request, workspace: str = "", synced: str = "", _: str = Depends(require_login)):
+def crm_board(request: Request, workspace: str = None, synced: str = "", _: str = Depends(require_login)):
     db.seed_crm_if_empty()
+    if workspace is None:  # no explicit choice -> scope to the current workspace
+        workspace = request.cookies.get("ws", "")
     sync_msg = ""
     if synced != "":
         sync_msg = (f'<div class="card" style="border-color:var(--ok);color:var(--ok);margin-bottom:12px">'
@@ -198,7 +200,8 @@ def crm_board(request: Request, workspace: str = "", synced: str = "", _: str = 
       <div style="margin-left:auto; display:flex; gap:10px; align-items:center">
         {_client_filter(workspace)}
         <form method="post" action="/crm/sync-booked" style="display:inline">
-          <button class="btn sec" type="submit" title="Import all leads currently in Meeting Booked">Sync booked leads</button>
+          <input type="hidden" name="workspace" value="{e(workspace or '')}">
+          <button class="btn sec" type="submit" title="Import this client's leads currently in Meeting Booked">Sync booked leads</button>
         </form>
         <button class="btn" onclick="newOpp('')">+ Add opportunity</button>
       </div>
@@ -217,8 +220,10 @@ def crm_board(request: Request, workspace: str = "", synced: str = "", _: str = 
 # -------------------------
 
 @router.get("/crm/list", response_class=HTMLResponse)
-def crm_list(request: Request, workspace: str = "", q: str = "", _: str = Depends(require_login)):
+def crm_list(request: Request, workspace: str = None, q: str = "", _: str = Depends(require_login)):
     db.seed_crm_if_empty()
+    if workspace is None:
+        workspace = request.cookies.get("ws", "")
     stages = {s.id: s for s in db.list_stages()}
     opps = db.list_opportunities(workspace=workspace or None, search=q or None)
     tagmap = _tag_map()
@@ -353,9 +358,12 @@ async def opp_save(request: Request, opp_id: str = "", _: str = Depends(require_
 
 
 @router.post("/crm/sync-booked")
-def crm_sync_booked(_: str = Depends(require_login)):
-    count = db.backfill_opportunities_from_booked()
-    return RedirectResponse(f"/crm?synced={count}", status_code=303)
+async def crm_sync_booked(request: Request, _: str = Depends(require_login)):
+    form = await request.form()
+    ws = form.get("workspace", "") or ""
+    count = db.backfill_opportunities_from_booked(workspace=ws or None)
+    suffix = f"&workspace={quote(ws)}" if ws else "&workspace="
+    return RedirectResponse(f"/crm?synced={count}{suffix}", status_code=303)
 
 
 @router.post("/crm/opp/{opp_id}/move")
