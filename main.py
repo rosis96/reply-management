@@ -596,7 +596,7 @@ def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
         return []
 
     start = datetime.now(_utc.utc) + timedelta(days=min_days)
-    end = start + timedelta(days=7)  # Calendly allows max 7-day window
+    end = start + timedelta(days=6)  # stay safely under Calendly's 7-day max
     params = {
         "event_type": event_type_uri,
         "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -611,6 +611,7 @@ def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
     if r.status_code != 200:
         log(f"Calendly available_times failed: {r.status_code} {r.text[:160]}")
         return []
+    log(f"Calendly: {len(r.json().get('collection', []))} raw open slots returned.")
 
     try:
         ptz = ZoneInfo(prospect_tz)
@@ -656,6 +657,68 @@ def get_calendly_slots(token, scheduling_url, prospect_tz, count=3,
     chosen.sort(key=lambda x: x[0])
     return [{"utc": key, "label": local.strftime("%A, %b %d at %-I:%M %p %Z")}
             for local, key in chosen]
+
+
+def calendly_probe(token, scheduling_url, prospect_tz="America/New_York"):
+    """Step-by-step diagnostic of the Calendly integration for one workspace.
+    Returns a dict the dashboard can render, so we can see exactly where it fails."""
+    from datetime import datetime, timedelta, timezone as _utc
+    info = {"token_present": bool(token), "steps": [], "error": "", "user": "",
+            "user_timezone": "", "event_types": [], "chosen_event_type": None,
+            "raw_slot_count": 0, "sample_raw": [], "proposed_local": []}
+    if not token:
+        info["error"] = "No Calendly token set on this workspace."
+        return info
+    try:
+        r = requests.get("https://api.calendly.com/users/me",
+                         headers=_calendly_headers(token), timeout=15)
+        info["steps"].append(f"GET /users/me -> HTTP {r.status_code}")
+        if r.status_code != 200:
+            info["error"] = f"/users/me failed (check the token / its scopes): {r.text[:280]}"
+            return info
+        user = r.json().get("resource", {})
+        user_uri = user.get("uri")
+        info["user"] = user.get("name") or user.get("email") or ""
+        info["user_timezone"] = user.get("timezone") or ""
+
+        r2 = requests.get("https://api.calendly.com/event_types", headers=_calendly_headers(token),
+                          params={"user": user_uri, "active": "true", "count": 100}, timeout=15)
+        info["steps"].append(f"GET /event_types -> HTTP {r2.status_code}")
+        items = r2.json().get("collection", []) if r2.status_code == 200 else []
+        info["event_types"] = [{"name": it.get("name", ""), "url": it.get("scheduling_url", ""),
+                                "active": it.get("active")} for it in items]
+
+        uri, _ = resolve_calendly_event_type(token, scheduling_url)
+        info["chosen_event_type"] = uri
+        if not uri:
+            info["error"] = ("No event type resolved. Make sure an event type is ACTIVE and that the "
+                             "scheduling link matches one of them.")
+            return info
+
+        start = datetime.now(_utc.utc) + timedelta(days=2)
+        end = start + timedelta(days=6)
+        r3 = requests.get("https://api.calendly.com/event_type_available_times",
+                          headers=_calendly_headers(token),
+                          params={"event_type": uri,
+                                  "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                  "end_time": end.strftime("%Y-%m-%dT%H:%M:%SZ")}, timeout=20)
+        info["steps"].append(f"GET /event_type_available_times -> HTTP {r3.status_code}")
+        if r3.status_code != 200:
+            info["error"] = f"available_times failed: {r3.text[:280]}"
+            return info
+        coll = r3.json().get("collection", [])
+        info["raw_slot_count"] = len(coll)
+        info["sample_raw"] = [c.get("start_time") for c in coll[:6]]
+
+        slots = get_calendly_slots(token, scheduling_url, prospect_tz, count=6)
+        info["proposed_local"] = [s["label"] for s in slots]
+        if coll and not slots:
+            info["error"] = ("The calendar HAS open times, but none fell inside the weekday "
+                             "10 AM-2 PM window for this timezone. Widen your Calendly availability "
+                             "or the proposal window.")
+    except Exception as ex:
+        info["error"] = f"Exception: {ex}"
+    return info
 
 
 def build_scheduling_context(workspace, location, prospect_key="", mode="reply"):
@@ -858,6 +921,8 @@ STEP 0 — USE THE RESPONSE TYPES (if the REPLY FORMAT RULES include "response_t
     reorder, or add paragraphs.
   * Replace every {{placeholder}} with specific, natural, personalized content for THIS prospect.
   * Keep the proposed-time structure exactly (e.g. two days with three time options each).
+  * If a LIVE SCHEDULING block is present above, fill the day/time placeholders with THOSE real
+    open times exactly — they OVERRIDE any example times written in the template. Never invent times.
   * This is FILL-IN-THE-TEMPLATE, not rewrite-from-scratch. Match the template's length; do NOT
     shorten it just because the prospect wrote a brief message.
   * You may reword ONLY where the template's own rules allow it (e.g. "only the first sentence may

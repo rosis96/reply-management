@@ -1527,6 +1527,7 @@ def _workspace_form(ws=None, error="", current_ws=""):
           <div><label>Calendly Personal Access Token</label><input type="text" name="calendly_token" value="{e(g('calendly_token'))}" placeholder="optional — enables real availability" style="width:100%"></div>
           <div><label>Calendly scheduling link</label><input type="text" name="calendly_scheduling_url" value="{e(g('calendly_scheduling_url'))}" placeholder="https://calendly.com/rosis/new-meeting" style="width:100%"></div>
         </div>
+        {("" if is_new else f'<p class="small" style="margin-top:8px"><a href="/dashboard/calendly?workspace=' + quote(name) + '">Check Calendly availability &rarr;</a> (shows exactly what the system reads and would propose)</p>')}
         <label class="flex"><input type="checkbox" name="active" value="1" {active_checked} style="margin-right:8px"> Active</label>
       </div>
       <div class="card">
@@ -1805,6 +1806,79 @@ async def test_generate(request: Request, _: str = Depends(require_login)):
         result_html = f'<div class="card" style="border-color:var(--no);color:var(--no)">Generation failed: {e(str(ex))}</div>'
 
     return HTMLResponse(_test_page(ws_name, thread_text, result_html, current_ws))
+
+
+# -------------------------
+# Calendly availability check (diagnostic)
+# -------------------------
+
+@router.get("/dashboard/calendly", response_class=HTMLResponse)
+def calendly_check(request: Request, workspace: str = "", _: str = Depends(require_login)):
+    try:
+        workspaces = db.list_workspaces()
+    except Exception:
+        workspaces = []
+    opts = '<option value="">— pick a workspace —</option>'
+    for w in workspaces:
+        sel = " selected" if w.name == workspace else ""
+        opts += f'<option value="{e(w.name)}"{sel}>{e(w.name)}</option>'
+
+    result = ""
+    if workspace:
+        cfg = db.get_workspace_config(workspace)
+        if not cfg:
+            result = '<div class="card" style="border-color:var(--no);color:var(--no)">Workspace not found.</div>'
+        else:
+            try:
+                import main
+                info = main.calendly_probe(cfg.get("calendly_token", ""),
+                                           cfg.get("calendly_scheduling_url", ""))
+            except Exception as ex:
+                info = {"error": f"Probe crashed: {ex}", "steps": []}
+
+            ok = bool(info.get("proposed_local"))
+            head = pill("Working", "ok") if ok else pill("Not working", "no")
+            steps = "<br>".join(e(s) for s in info.get("steps", [])) or "—"
+            ets = ""
+            for et in info.get("event_types", []):
+                ets += f'<div class="small">• {e(et.get("name",""))} — <span class="muted">{e(et.get("url",""))}</span></div>'
+            ets = ets or '<div class="muted small">No active event types found.</div>'
+            raw = "<br>".join(e(x) for x in info.get("sample_raw", [])) or "—"
+            proposed = ""
+            for p in info.get("proposed_local", []):
+                proposed += f'<div>• {e(p)}</div>'
+            proposed = proposed or '<div class="muted small">None</div>'
+            err = ""
+            if info.get("error"):
+                err = f'<div class="card" style="border-color:var(--no)"><b style="color:var(--no)">Problem:</b> {e(info["error"])}</div>'
+            result = f"""
+            {err}
+            <div class="card">
+              <h3>Calendly check {head}</h3>
+              <p class="small"><b>Account:</b> {e(info.get("user","") or "—")} &nbsp; <b>Calendly timezone:</b> {e(info.get("user_timezone","") or "—")}</p>
+              <p class="small"><b>API calls:</b><br>{steps}</p>
+              <p class="small"><b>Active event types:</b></p>{ets}
+              <p class="small" style="margin-top:8px"><b>Chosen event type:</b> {e(str(info.get("chosen_event_type") or "—"))}</p>
+              <p class="small"><b>Raw open slots in next 6 days:</b> {info.get("raw_slot_count",0)}</p>
+              <p class="small"><b>Sample raw times (UTC):</b><br>{raw}</p>
+            </div>
+            <div class="card">
+              <h3>Times the system would propose (Eastern sample)</h3>
+              {proposed}
+            </div>"""
+
+    body = f"""
+    <h1>Calendly availability check</h1>
+    <p class="sub">Confirms whether the system can read a client's real calendar and what times it would propose. Read-only — nothing is booked or reserved.</p>
+    <form method="get" action="/dashboard/calendly">
+      <div class="card">
+        <label>Workspace</label>
+        <select name="workspace" style="width:100%" onchange="this.form.submit()">{opts}</select>
+      </div>
+    </form>
+    {result}
+    """
+    return HTMLResponse(layout("Calendly check", "workspaces", body, current_ws=request.cookies.get("ws", "")))
 
 
 # -------------------------
