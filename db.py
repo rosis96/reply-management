@@ -203,6 +203,9 @@ class Opportunity(Base):
     source = Column(String(120), default="")           # original source
     next_step = Column(Text, default="")               # the agreed next action
     meeting_outcome = Column(String(60), default="")   # outcome of the meeting
+    location = Column(String(255), default="")         # from platform lead data
+    contact_linkedin = Column(String(512), default="") # personal LinkedIn URL
+    company_linkedin = Column(String(512), default="") # company LinkedIn URL
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     stage_changed_at = Column(DateTime, default=datetime.utcnow)
@@ -257,7 +260,9 @@ def migrate():
         if inspect(engine).has_table("opportunities"):
             opp_cols = {c["name"] for c in inspect(engine).get_columns("opportunities")}
             opp_adds = {"close_date": "VARCHAR(40)", "source": "VARCHAR(120)",
-                        "next_step": "TEXT", "meeting_outcome": "VARCHAR(60)"}
+                        "next_step": "TEXT", "meeting_outcome": "VARCHAR(60)",
+                        "location": "VARCHAR(255)", "contact_linkedin": "VARCHAR(512)",
+                        "company_linkedin": "VARCHAR(512)"}
             with engine.begin() as conn:
                 for col, coltype in opp_adds.items():
                     if col not in opp_cols:
@@ -1076,6 +1081,39 @@ def opportunity_stage_totals(workspace=None):
         session.close()
 
 
+def extract_lead_enrichment(lead_data_json):
+    """Pull company/location/LinkedIn/website out of the raw platform payload
+    (Bison & Instantly use different key names — be tolerant)."""
+    out = {"company": "", "location": "", "contact_linkedin": "", "company_linkedin": "", "website": ""}
+    try:
+        d = json.loads(lead_data_json or "{}")
+    except Exception:
+        return out
+    if not isinstance(d, dict):
+        return out
+    # payloads sometimes nest under "lead" / "custom_variables" / "customFields"
+    layers = [d]
+    for k in ("lead", "custom_variables", "customFields", "custom_fields", "payload"):
+        if isinstance(d.get(k), dict):
+            layers.append(d[k])
+    def pick(*keys):
+        for layer in layers:
+            low = {str(kk).lower().replace("_", "").replace(" ", ""): vv for kk, vv in layer.items()}
+            for key in keys:
+                v = low.get(key)
+                if v and isinstance(v, str) and v.strip():
+                    return v.strip()
+        return ""
+    out["company"] = pick("companyname", "company", "organization", "orgname")
+    out["location"] = pick("location", "city", "companylocation", "region", "country", "state")
+    out["contact_linkedin"] = pick("linkedin", "linkedinurl", "linkedinprofile", "personallinkedin", "linkedinpersonal")
+    out["company_linkedin"] = pick("companylinkedin", "companylinkedinurl", "organizationlinkedin", "linkedincompany", "companylinkedinprofile")
+    out["website"] = pick("website", "companywebsite", "domain", "companydomain", "websiteurl")
+    if out["website"] and not out["website"].startswith("http"):
+        out["website"] = "https://" + out["website"]
+    return out
+
+
 def backfill_opportunities_from_booked(workspace=None):
     """One-time catch-up: create CRM opportunities for every existing lead whose
     stage is 'booked' that doesn't already have one. Optionally scoped to one
@@ -1095,10 +1133,14 @@ def backfill_opportunities_from_booked(workspace=None):
             key = (ld.workspace_name or "", ld.external_lead_id or str(ld.id))
             if key in existing:
                 continue
+            enr = extract_lead_enrichment(ld.lead_data)
             session.add(Opportunity(
                 workspace_name=key[0], lead_id=key[1],
-                deal_name=(ld.company or ld.name or "New deal"),
-                contact_name=ld.name or "", email=ld.email or "", company=ld.company or "",
+                deal_name=(ld.company or enr["company"] or ld.name or "New deal"),
+                contact_name=ld.name or "", email=ld.email or "",
+                company=(ld.company or enr["company"]),
+                website=enr["website"], location=enr["location"],
+                contact_linkedin=enr["contact_linkedin"], company_linkedin=enr["company_linkedin"],
                 lead_intent=ld.intent or "", stage_id=(stage.id if stage else None)))
             existing.add(key)
             created += 1
@@ -1109,7 +1151,8 @@ def backfill_opportunities_from_booked(workspace=None):
 
 
 def upsert_opportunity_from_lead(workspace_name, lead_id, contact_name="", email="",
-                                 company="", lead_intent="", stage_name="Meeting Booked"):
+                                 company="", lead_intent="", stage_name="Meeting Booked",
+                                 lead_data=""):
     """Create a CRM opportunity for a booked lead. De-dupes by (workspace, lead_id):
     if one already exists, it is left as-is (returns its id)."""
     lead_id = str(lead_id or "")
@@ -1122,10 +1165,14 @@ def upsert_opportunity_from_lead(workspace_name, lead_id, contact_name="", email
             return existing.id
         stage = (session.query(CrmStage).filter(CrmStage.name == stage_name).first()
                  or session.query(CrmStage).order_by(CrmStage.sort_order, CrmStage.id).first())
+        enr = extract_lead_enrichment(lead_data)
         opp = Opportunity(
             workspace_name=workspace_name, lead_id=lead_id,
-            deal_name=(company or contact_name or "New deal"),
-            contact_name=contact_name, email=email, company=company,
+            deal_name=(company or enr["company"] or contact_name or "New deal"),
+            contact_name=contact_name, email=email,
+            company=(company or enr["company"]),
+            website=enr["website"], location=enr["location"],
+            contact_linkedin=enr["contact_linkedin"], company_linkedin=enr["company_linkedin"],
             lead_intent=lead_intent, stage_id=(stage.id if stage else None),
         )
         session.add(opp)

@@ -590,6 +590,10 @@ thead th { background:#faf9fe; color:#56536a; }
 /* ===== full width + collapsible nav groups ===== */
 .lcontent { max-width:none; }
 .navgroup { margin-bottom:2px; }
+.navgroup.g-studio .navgroup-head { background:#f5f3ff; border:1px solid #e9e5fb; color:#5b21b6; font-weight:600; }
+.navgroup.g-studio .navgroup-head > .material-symbols-outlined { color:#7c6cf6; }
+.navgroup.g-studio.open .navgroup-body { background:#fbfaff; border:1px solid #f0edfb; border-top:none; border-radius:0 0 10px 10px; margin-top:-4px; padding-top:8px; }
+.nav-sep { font-size:9.5px; letter-spacing:.18em; text-transform:uppercase; color:#a5a1b5; font-weight:700; padding:14px 10px 6px; border-top:1px solid #eceaf3; margin-top:10px; }
 .navgroup-head { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px;
                  color:#3f3c52; font-weight:700; font-size:13px; cursor:pointer; user-select:none; }
 .navgroup-head:hover { background:#e6e1f4; }
@@ -786,8 +790,11 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
     sidebar_nav = ""
     for gi, (glabel, gicon, items) in enumerate(nav_groups):
         is_open = any(it[0] == active_key for it in items) or (not any_open and gi == 0)
+        if gi == 1:
+            sidebar_nav += '<div class="nav-sep">Operations</div>'
+        gcls = "g-studio" if gi == 0 else "g-ops"
         sidebar_nav += (
-            f'<div class="navgroup {"open" if is_open else ""}">'
+            f'<div class="navgroup {gcls} {"open" if is_open else ""}">'
             f'<div class="navgroup-head" onclick="this.parentNode.classList.toggle(\'open\')">'
             f'<span class="material-symbols-outlined">{gicon}</span>{glabel}'
             f'<span class="material-symbols-outlined car">chevron_right</span></div>'
@@ -1261,6 +1268,7 @@ def _crm_sync_booked(ld):
             email=ld.email or "",
             company=ld.company or "",
             lead_intent=ld.intent or "",
+            lead_data=ld.lead_data or "",
         )
     except Exception:
         pass

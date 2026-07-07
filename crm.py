@@ -342,6 +342,9 @@ def opp_form(opp_id: str = "", stage_id: str = "", _: str = Depends(require_logi
         <div><label>Next action date</label><input type="date" name="next_action_date" value="{e(val('next_action_date'))}" style="width:100%"></div>
       </div>
       <label>Website</label><input type="text" name="website" value="{e(val('website'))}" style="width:100%">
+      <label>Location</label><input type="text" name="location" value="{e(val('location'))}" style="width:100%">
+      <label>Contact LinkedIn</label><input type="text" name="contact_linkedin" value="{e(val('contact_linkedin'))}" style="width:100%">
+      <label>Company LinkedIn</label><input type="text" name="company_linkedin" value="{e(val('company_linkedin'))}" style="width:100%">
       <div style="border-top:1px solid var(--line);margin:14px 0 4px;padding-top:10px;font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Post-meeting</div>
       <div class="row2">
         <div><label>Meeting outcome</label><select name="meeting_outcome" style="width:100%">{_outcome_opts(val('meeting_outcome'))}</select></div>
@@ -377,6 +380,8 @@ async def opp_save(request: Request, opp_id: str = "", _: str = Depends(require_
         "tag_ids": json.dumps([int(t) for t in tag_ids if str(t).isdigit()]),
         "close_date": form.get("close_date", ""), "source": form.get("source", ""),
         "next_step": form.get("next_step", ""), "meeting_outcome": form.get("meeting_outcome", ""),
+        "location": form.get("location", ""), "contact_linkedin": form.get("contact_linkedin", ""),
+        "company_linkedin": form.get("company_linkedin", ""),
     }
     new_id = db.save_opportunity(opp_id or None, data)
     return JSONResponse({"ok": True, "id": new_id})

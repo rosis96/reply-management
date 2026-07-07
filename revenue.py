@@ -765,6 +765,12 @@ def promote_opportunity(request: Request, opp_id: int = 0, _: str = Depends(requ
         return RedirectResponse(f"/clients/{slug}?msg=Already in Studio — this opportunity was promoted earlier.", status_code=303)
 
     notes = []
+    if getattr(o, "location", ""):
+        notes.append(f"Location: {o.location}")
+    if getattr(o, "contact_linkedin", ""):
+        notes.append(f"Contact LinkedIn: {o.contact_linkedin}")
+    if getattr(o, "company_linkedin", ""):
+        notes.append(f"Company LinkedIn: {o.company_linkedin}")
     if getattr(o, "lead_intent", ""):
         notes.append(f"Lead intent: {o.lead_intent}")
     if getattr(o, "meeting_outcome", ""):
@@ -783,6 +789,7 @@ def promote_opportunity(request: Request, opp_id: int = 0, _: str = Depends(requ
         "clientName": (o.contact_name or "").strip() or company,
         "clientEmail": (o.email or "").strip(),
         "website": (o.website or "").strip(),
+        "companyAddress": (getattr(o, "location", "") or "").strip(),
         "salesCallNotes": "\n".join(notes),
         "pricingNotes": (f"CRM deal value: ${int(o.value):,}" if getattr(o, "value", 0) else ""),
         "slug": slug,
