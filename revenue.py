@@ -504,6 +504,9 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
     intake_rows = "".join(f"<div><b>{e(k)}</b> {e(str(v)[:400])}</div>" for k, v in intake.items() if v) \
         or '<div class="muted">No intake data stored.</div>'
     aisum = c.get("aiSummary") or {}
+    mismatch = ""
+    if "MISMATCH" in str(aisum.get("notesForAscendly", "")).upper():
+        mismatch = _err("⚠ Studio AI flagged a mismatch: the transcript appears to be about a different company than this workspace. Check the AI notes in the Blueprint tab before publishing.")
     ai_block = ""
     if aisum:
         ai_block = (f'<div class="rv-kv" style="margin-top:8px"><b>AI bottleneck</b> {e(aisum.get("mainBottleneck", ""))}<br>'
@@ -546,7 +549,7 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
         exec_html = (f'<a class="btn ok sm" href="{e(links.get("downloadUrl", ""))}">Download PDF</a>'
                      f'<button class="btn sec sm" onclick="rvPost(\'/clients/{e(slug)}/resend\',{{}},this)">Resend email</button>')
 
-    body = f"""{REV_CSS}{notice}
+    body = f"""{REV_CSS}{notice}{mismatch}
     <div class="rv-top">
       <h1>{e(c.get("companyName", ""))}</h1>
       {status_pill(c.get("status"))}
