@@ -549,6 +549,74 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
           </form>
         </details>"""
 
+    # ── internal sales intelligence (never client-visible) ──
+    intel = aisum.get("internal") or {}
+    ops = intel.get("opportunityScore") or {}
+    coach = intel.get("salesCoach") or {}
+    missing = [m for m in (intel.get("missingInfo") or []) if m]
+
+    def score_bar(label, v):
+        try:
+            n = max(0, min(10, float(v)))
+        except Exception:
+            n = 0
+        color = "#34d399" if n >= 7 else ("#fbbf24" if n >= 4 else "#f87171")
+        return (f'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px">'
+                f'<span style="color:#6b7280">{e(label)}</span><b>{n:g}/10</b></div>'
+                f'<div style="height:6px;border-radius:99px;background:#f3f4f6;margin-top:3px">'
+                f'<div style="height:6px;border-radius:99px;width:{n * 10}%;background:{color}"></div></div></div>')
+
+    if intel:
+        bars = "".join(score_bar(l, ops.get(k)) for k, l in
+                       [("overall", "Overall opportunity"), ("budget", "Budget"), ("authority", "Authority"),
+                        ("urgency", "Urgency"), ("fit", "Business fit")])
+        klist = lambda items: "".join(f'<li style="margin-bottom:5px">{e(str(x))}</li>' for x in (items or []))
+        intel_pane = f"""
+          <div class="rv-grid">
+            <div class="rv-card"><h3>🎯 Opportunity Score <span class="muted" style="font-weight:400">(internal)</span></h3>
+              {bars}
+              <div class="rv-kv" style="margin-top:10px">
+                <b>Close probability</b> {e(str(ops.get("closeProbability") or "—"))}<br>
+                <b>Revenue potential</b> {e(str(ops.get("revenuePotential") or "—"))}<br>
+                <b>Risk</b> {e(str(ops.get("risk") or "—"))}<br>
+                <b>AI confidence</b> {e(str(ops.get("confidence") or "—"))}
+              </div>
+            </div>
+            <div class="rv-card"><h3>🧠 Sales Coach — next call</h3>
+              <div class="rv-kv">
+                <b>Biggest objection</b> {e(str(coach.get("biggestObjection") or "—"))}<br>
+                <b>How to answer</b> {e(str(coach.get("objectionResponse") or "—"))}<br>
+                <b>Pricing stance</b> {e(str(coach.get("pricingConfidence") or "—"))}<br>
+                <b>Next step</b> {e(str(coach.get("recommendedNextStep") or "—"))}
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;font-size:12.5px">
+                <div><b style="color:#065f46">Emphasize</b><ul style="padding-left:16px;margin:6px 0">{klist(coach.get("emphasize"))}</ul></div>
+                <div><b style="color:#b91c1c">Avoid</b><ul style="padding-left:16px;margin:6px 0">{klist(coach.get("avoid"))}</ul></div>
+              </div>
+              <div style="margin-top:8px;font-size:12.5px"><b>Questions to ask</b><ul style="padding-left:16px;margin:6px 0">{klist(coach.get("questionsToAsk"))}</ul></div>
+            </div>
+            <div class="rv-card" style="grid-column:1/-1"><h3>❓ Missing information ({len(missing)})</h3>
+              {('<ul style="padding-left:16px;font-size:13px;margin:0">' + klist(missing) + '</ul>') if missing else '<span class="muted" style="font-size:13px">Nothing critical missing — the call covered the essentials.</span>'}
+            </div>
+          </div>"""
+    else:
+        intel_pane = '<div class="rv-card"><p class="muted" style="font-size:13px;margin:0">No sales intelligence yet — add a transcript and generate. The AI will score the opportunity, prep you for objections, and flag missing information. Internal only; the client never sees this.</p></div>'
+
+    # ── publish readiness (deterministic checks) ──
+    checks = [
+        ("Transcript on file", has_transcript),
+        ("AI personalization generated", bool(aisum)),
+        ("Pricing sourced from the call", bool(aisum.get("commercial"))),
+        ("No company mismatch flagged", not bool(mismatch)),
+        ("Client logo set", bool(str(c.get("clientLogo") or "").strip())),
+    ]
+    ready_n = sum(1 for _, ok in checks if ok)
+    readiness = ('<div class="rv-card"><h3>Publish readiness · ' + f'{ready_n}/{len(checks)}' + '</h3>'
+                 + "".join(f'<div class="rv-item" style="padding:6px 0">{"✅" if ok else "▫️"} <span style="font-size:13px">{e(lbl)}</span></div>' for lbl, ok in checks)
+                 + ('<p class="muted" style="font-size:12px;margin:8px 0 0">Missing checks are advisory — you can still publish.</p>' if ready_n < len(checks) else
+                    '<p style="font-size:12px;margin:8px 0 0;color:#065f46">Ready to present and publish.</p>')
+                 + '</div>')
+
     published = c.get("published", True)
     pub_btn = (f'<button class="btn sec sm" onclick="rvPost(\'/clients/{e(slug)}/publish\',{{published:false}},this)">Unpublish</button>'
                if published else
@@ -581,6 +649,7 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
           <div class="rv-tab on" data-p="ovr">Overview</div>
           <div class="rv-tab" data-p="bp">Blueprint</div>
           <div class="rv-tab" data-p="ag">Agreement</div>
+          <div class="rv-tab" data-p="si">Sales Intel{f' <span style="background:#fef3c7;color:#92400e;border-radius:99px;padding:0 7px;font-size:10.5px">{len(missing)}</span>' if missing else ''}</div>
           <div class="rv-tab" data-p="tl">Timeline</div>
           <div class="rv-tab" data-p="nt">Notes</div>
         </div>
@@ -606,12 +675,14 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
             <div class="rv-links"><a target="_blank" href="{e(links.get("blueprintUrl", ""))}">{e(links.get("blueprintUrl", ""))}</a></div>
             <div class="rv-actions">
               <a class="btn sm" target="_blank" href="{e(links.get("previewBlueprintUrl", ""))}">Preview</a>
+              <a class="btn sm" target="_blank" href="{e(links.get("previewBlueprintUrl", ""))}&present=1" style="background:#7c6cf6;color:#fff;border-color:#7c6cf6">▶ Present</a>
               <button class="btn sec sm" onclick="rvCopy('{e(links.get("blueprintUrl", ""))}',this)">Copy link</button>
               {pub_btn}
               <button class="btn sec sm" onclick="rvPost('/clients/{e(slug)}/regen',{{}},this)">Regenerate AI</button>
             </div>
             {ai_block}
           </div>
+          {readiness}
         </div>
 
         <div class="rv-pane" id="p-ag">
@@ -639,6 +710,8 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
             {lock_note}
           </div>
         </div>
+
+        <div class="rv-pane" id="p-si">{intel_pane}</div>
 
         <div class="rv-pane" id="p-tl">
           <div class="rv-card"><h3>Timeline</h3><ul class="rv-tl">{tl}</ul></div>
