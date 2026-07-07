@@ -86,7 +86,7 @@ def _login_html(error=""):
 </style></head><body>
   <form class="card" method="post" action="/login">
     <div class="brand"><span class="chip">A</span><span>Ascendly</span></div>
-    <p class="sub">Reply Manager · sign in to continue</p>
+    <p class="sub">Ascendly Studio · sign in to continue</p>
     {err}
     <label>Username</label>
     <input type="text" name="username" value="admin" autocomplete="username" autofocus>
@@ -737,30 +737,27 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
 
     # (key, label, icon, href, badge_count, danger)
     nav_groups = [
-        ("Outbound", "campaign", [
+        ("Studio", "auto_awesome", [
+            ("home", "Home", "space_dashboard", "/home", counts.get("needs_review", 0) or None, True),
+            ("clients", "Clients", "group", "/clients", None, False),
+            ("templates", "Templates", "category", "/templates", None, False),
+            ("settings", "Settings", "settings", "/dashboard/settings", None, False),
+        ]),
+        ("Operations", "tune", [
             ("all", "All Replies", "dashboard", "/dashboard", counts.get("total", 0), False),
             ("needs_review", "Needs Review", "flag", "/dashboard?status=needs_review", counts.get("needs_review", 0), True),
             ("replied", "Replied", "reply", "/dashboard?status=replied", counts.get("replied", 0), False),
             ("booked", "Meeting Booked", "event_available", "/dashboard?stage=booked", counts.get("booked", 0), False),
             ("stopped", "Stopped", "block", "/dashboard?status=stopped", counts.get("stopped", 0), False),
-            ("rules", "Rules", "rule", "/dashboard/rules", None, False),
-            ("test", "Test thread", "science", "/dashboard/test", None, False),
-        ]),
-        ("Inbound", "call_received", [
-            ("inbound", "Website leads", "language", "/dashboard/soon?name=Inbound+leads", None, False),
-            ("inbound_forms", "Forms", "dynamic_form", "/dashboard/soon?name=Inbound+forms", None, False),
-        ]),
-        ("CRM", "space_dashboard", [
             ("crm_board", "Pipeline", "view_kanban", "/crm", None, False),
             ("crm_list", "List view", "list", "/crm/list", None, False),
             ("crm_contacts", "Contacts", "contacts", "/crm/contacts", None, False),
             ("crm_activities", "Activities", "event_note", "/crm/activities", None, False),
             ("crm_reports", "Reports", "insights", "/crm/reports", None, False),
             ("crm_stages", "Stages & tags", "tune", "/crm/stages", None, False),
-        ]),
-        ("Manage", "settings", [
+            ("rules", "Rules", "rule", "/dashboard/rules", None, False),
+            ("test", "Test thread", "science", "/dashboard/test", None, False),
             ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
-            ("settings", "Settings", "settings", "/dashboard/settings", None, False),
             ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
         ]),
     ]
@@ -809,7 +806,7 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
 <title>{e(title)}</title><style>{PAGE_CSS}</style></head><body>
 <div class="app">
   <aside class="lsidebar">
-    <div class="lbrand"><span class="chip">A</span><span>Ascendly</span></div>
+    <div class="lbrand"><span class="chip">A</span><span>Ascendly <b style="font-weight:600;color:#7c6cf6">Studio</b></span></div>
     {sidebar_nav}
     <div class="lspacer"></div>
     <a class="lnav-logout" href="/dashboard/logout"><span class="material-symbols-outlined">logout</span><span class="nlbl">Logout</span></a>
@@ -987,7 +984,7 @@ def console(request: Request, workspace: str = "", status: str = "", intent: str
           <a class="bbtn" href="{nr}">View priorities</a>
         </div>"""
 
-    title = "Meeting Booked" if stage == "booked" else "Reply Manager"
+    title = "Meeting Booked" if stage == "booked" else "Ascendly Studio"
     body = f"""
     <div class="secthead">
       <h2>Performance Overview</h2>

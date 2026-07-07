@@ -35,6 +35,9 @@ def _startup():
 app.include_router(dashboard_router)
 app.include_router(crm_router)
 
+from revenue import router as revenue_router  # Revenue OS module (blueprints + agreements)
+app.include_router(revenue_router)
+
 DEFAULT_REPLY_DELAY_SECONDS = 420
 REPLY_DELAY_SECONDS = DEFAULT_REPLY_DELAY_SECONDS  # kept for reference / fallback
 PROCESSED_FILE = "logs/processed_replies.json"
@@ -2069,7 +2072,7 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
 @app.get("/")
 def root():
     # Send visitors straight to the dashboard.
-    return RedirectResponse("/dashboard")
+    return RedirectResponse("/home")
 
 
 @app.get("/healthz")
