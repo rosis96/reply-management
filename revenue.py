@@ -172,56 +172,56 @@ def _err(msg):
 
 @router.get("/home", response_class=HTMLResponse)
 def home(request: Request, _: str = Depends(require_login)):
-    import db
-
-    # replies waiting
-    replies_html, replies_n = "", 0
-    try:
-        counts = db.lead_counts(None)
-        replies_n = counts.get("needs_review", 0)
-        res = db.list_leads(status="needs_review")
-        leads = res[0] if isinstance(res, tuple) else res
-        for l in (leads or [])[:5]:
-            replies_html += (f'<div class="rv-item"><b>{e(getattr(l, "name", "") or getattr(l, "email", ""))}</b>'
-                             f'<span class="muted">{e(getattr(l, "workspace_name", ""))}</span>'
-                             f'<span class="sp"><a class="btn sec sm" href="/dashboard?status=needs_review">Review</a></span></div>')
-    except Exception as ex:
-        replies_html = f'<div class="muted">({e(str(ex)[:80])})</div>'
-
-    # portal clients
+    """Studio Home — the revenue command center. No inbox, no reply queues."""
     data = svc("GET", "/service/clients")
     clients = data.get("clients", []) if data.get("ok") else []
     svc_err = "" if data.get("ok") else _err(data.get("error", ""))
 
-    drafts = [c for c in clients if c.get("status") == "draft"]
-    waiting_cs = [c for c in clients if c.get("clientSignedAt") and not c.get("executedAt")]
+    by = {"draft": [], "published": [], "client_signed": [], "executed": [], "active": []}
+    for c in clients:
+        by.setdefault(c.get("status", "draft"), []).append(c)
 
-    drafts_html = "".join(
-        f'<div class="rv-item"><b>{e(c["companyName"])}</b>'
-        f'<span class="sp"><a class="btn sec sm" href="{e(c["links"]["previewBlueprintUrl"])}" target="_blank">Preview</a>'
-        f' <a class="btn sm" href="/clients/{e(c["slug"])}">Open</a></span></div>'
-        for c in drafts[:5]) or '<div class="muted" style="font-size:13px">Nothing in draft.</div>'
+    def money_num(v):
+        digits = "".join(ch for ch in str(v or "") if ch.isdigit())
+        return int(digits) if digits else 0
 
-    cs_html = "".join(
-        f'<div class="rv-item"><b>{e(c["companyName"])}</b>'
-        f'<span class="muted">{e(c.get("clientSignedAt", ""))}</span>'
-        f'<span class="sp"><a class="btn sm" href="{e(c["links"]["countersignUrl"])}" target="_blank">Countersign now</a></span></div>'
-        for c in waiting_cs[:5]) or '<div class="muted" style="font-size:13px">Nothing waiting on you. Good.</div>'
+    mrr = sum(money_num(c.get("investment")) for c in by["active"])
+    pipeline_value = sum(money_num(c.get("total")) for c in by["draft"] + by["published"] + by["client_signed"])
 
-    # follow-ups due (post-meeting CRM fields)
-    fu_html = ""
-    try:
-        opps = db.list_opportunities() or []
-        due = [o for o in opps if (getattr(o, "next_step", "") or "").strip()][:5]
-        fu_html = "".join(
-            f'<div class="rv-item"><b>{e(getattr(o, "company", "") or getattr(o, "deal_name", ""))}</b>'
-            f'<span class="muted">{e((getattr(o, "next_step", "") or "")[:60])}</span>'
-            f'<span class="sp"><a class="btn sec sm" href="/crm/list">Open</a></span></div>'
-            for o in due) or '<div class="muted" style="font-size:13px">No follow-ups recorded.</div>'
-    except Exception:
-        fu_html = '<div class="muted" style="font-size:13px">—</div>'
+    def chip(n, label, href="/clients"):
+        return (f'<a href="{href}" style="text-decoration:none;color:inherit;flex:1">'
+                f'<div class="rv-card" style="text-align:center;margin:0"><div class="rv-count">{n}</div>'
+                f'<div class="muted" style="font-size:12px">{e(label)}</div></div></a>')
 
-    # recent activity across all clients
+    chips = ('<div style="display:flex;gap:12px;margin-bottom:14px">'
+             + chip(len(by["draft"]), "Draft blueprints")
+             + chip(len(by["published"]), "Live — awaiting signature")
+             + chip(len(by["client_signed"]), "Awaiting countersign")
+             + chip(len(by["executed"]), "Ready to onboard")
+             + chip(len(by["active"]), "Active clients")
+             + f'<div class="rv-card" style="text-align:center;margin:0;flex:1;background:#f5f3ff;border-color:#ddd6fe">'
+               f'<div class="rv-count">${mrr:,}</div><div class="muted" style="font-size:12px">MRR (active)</div></div>'
+             + '</div>')
+
+    def rows(items, action_html):
+        return "".join(
+            f'<div class="rv-item"><a href="/clients/{e(c["slug"])}" style="text-decoration:none;color:inherit"><b>{e(c["companyName"])}</b></a>'
+            f'<span class="muted small">{e(c.get("clientName", ""))}</span>'
+            f'<span class="sp">{action_html(c)}</span></div>'
+            for c in items[:5])
+
+    cs_html = rows(by["client_signed"], lambda c:
+        f'<a class="btn sm" href="{e(c["links"]["countersignUrl"])}" target="_blank">Countersign now</a>')         or '<div class="muted" style="font-size:13px">Nothing waiting on your signature.</div>'
+
+    onboard_html = rows(by["executed"], lambda c:
+        f'<a class="btn sm" href="/clients/{e(c["slug"])}">Start onboarding</a>')         or '<div class="muted" style="font-size:13px">No executed agreements pending kickoff.</div>'
+
+    draft_html = rows(by["draft"], lambda c:
+        f'<a class="btn sec sm" href="{e(c["links"]["previewBlueprintUrl"])}" target="_blank">Review</a>')         or '<div class="muted" style="font-size:13px">Nothing in draft.</div>'
+
+    live_html = rows(by["published"], lambda c:
+        f'<a class="btn sec sm" href="/clients/{e(c["slug"])}">Open</a>')         or '<div class="muted" style="font-size:13px">No blueprints out with prospects right now.</div>'
+
     act = svc("GET", "/service/activity?limit=12")
     act_html = "".join(
         f'<li class="{"view" if a["event"].endswith("_viewed") else ""}">'
@@ -231,17 +231,18 @@ def home(request: Request, _: str = Depends(require_login)):
 
     body = f"""{REV_CSS}{svc_err}
     <div class="rv-top"><h1>Home</h1>
-      <span class="muted" style="font-size:13px">What needs you today</span>
+      <span class="muted" style="font-size:13px">Revenue pipeline · ${pipeline_value:,} in play</span>
       <div style="margin-left:auto;display:flex;gap:8px">
         <a class="btn sec" href="/assistant">Ask Studio AI</a>
         <a class="btn" href="/clients/new">+ New Client</a>
       </div>
     </div>
+    {chips}
     <div class="rv-home">
-      <div class="rv-card"><h3><span class="rv-count">{replies_n}</span> &nbsp;Replies waiting</h3>{replies_html}</div>
-      <div class="rv-card"><h3><span class="rv-count">{len(waiting_cs)}</span> &nbsp;Agreements waiting countersign</h3>{cs_html}</div>
-      <div class="rv-card"><h3><span class="rv-count">{len(drafts)}</span> &nbsp;Blueprints in draft</h3>{drafts_html}</div>
-      <div class="rv-card"><h3>Follow-ups due</h3>{fu_html}</div>
+      <div class="rv-card"><h3>✍️ Awaiting your countersign</h3>{cs_html}</div>
+      <div class="rv-card"><h3>🚀 Ready to onboard</h3>{onboard_html}</div>
+      <div class="rv-card"><h3>📝 Blueprints in draft</h3>{draft_html}</div>
+      <div class="rv-card"><h3>👀 With prospects — awaiting signature</h3>{live_html}</div>
     </div>
     <div class="rv-card"><h3>Recent activity</h3><ul class="rv-tl">{act_html}</ul></div>
     """
@@ -285,20 +286,75 @@ def clients_list(request: Request, _: str = Depends(require_login)):
 @router.get("/templates", response_class=HTMLResponse)
 def templates_page(request: Request, _: str = Depends(require_login)):
     cards = [
-        ("Blueprint template", "The client-facing Revenue Blueprint page. Lives in the portals service (templates/blueprint.html). Per-client bespoke overrides supported.", "Editable in repo"),
-        ("Agreement template", "Agreement page + executed PDF layout (templates/agreement.html, pdf.js).", "Editable in repo"),
-        ("AI prompts", "Blueprint personalization prompt (prompts/blueprint-system-prompt.txt) and Studio AI behavior.", "Editable in repo"),
-        ("Email templates", "Make.com scenario emails: countersign notification & executed agreement delivery.", "Managed in Make"),
-        ("Pricing templates", "Default: $4,000/month · 3 months · $12,000. Set per client at creation or via Studio AI.", "Coming soon"),
+        ("Revenue Blueprint", "The personalized strategy presentation every prospect receives. Studio AI tailors the bottlenecks, focus and summary to each client from your discovery call.", "Active", "ok"),
+        ("Agreement", "Your standard Revenue Growth System agreement — e-signature, countersign and executed PDF included. Commercial terms are set per client.", "Active", "ok"),
+        ("Client emails", "The signing notification you receive and the executed-agreement email your client receives.", "Active", "ok"),
+        ("AI personalization", "The rules Studio AI follows when writing client-specific blueprint content.", "Active", "ok"),
+        ("Engagement pricing", "Default terms for new clients: $4,000/month · 3 months · $12,000 total. Adjust per client at creation, in the workspace, or by asking Studio AI.", "Default", "blue"),
     ]
     html = "".join(
-        f'<div class="rv-card"><h3>{e(t)}</h3><p class="muted" style="font-size:13px;margin:0 0 8px">{e(d)}</p>{pill(s, "blue" if "repo" in s else "muted")}</div>'
-        for t, d, s in cards)
+        f'<div class="rv-card"><h3>{e(t)}</h3><p class="muted" style="font-size:13px;margin:0 0 10px">{e(d)}</p>{pill(st, kind)}</div>'
+        for t, d, st, kind in cards)
     body = f"""{REV_CSS}
-    <div class="rv-top"><h1>Templates</h1><span class="muted" style="font-size:13px">In-Studio template editing is on the roadmap — today these live in the repos/Make.</span></div>
+    <div class="rv-top"><h1>Templates</h1>
+      <span class="muted" style="font-size:13px">The building blocks every client engagement is created from. In-Studio editing is coming.</span></div>
     <div class="rv-grid">{html}</div>
     """
     return layout("Templates", "templates", body)
+
+
+# ============================================================
+# STUDIO SETTINGS (Studio-scoped only — outbound config lives in Reply Settings)
+# ============================================================
+
+@router.get("/studio/settings", response_class=HTMLResponse)
+def studio_settings(request: Request, _: str = Depends(require_login)):
+    # connection health
+    data = svc("GET", "/service/clients")
+    if data.get("ok"):
+        n = len(data.get("clients", []))
+        conn = f'{pill("Connected", "ok")} <span class="muted" style="font-size:13px">Document service is reachable · {n} client workspace{"s" if n != 1 else ""}</span>'
+        links = (data["clients"][0].get("links", {}) if data.get("clients") else {})
+    else:
+        conn = f'{pill("Not connected", "no")} <span class="muted" style="font-size:13px">{e(data.get("error", ""))}</span>'
+        links = {}
+
+    def host(u):
+        try:
+            return u.split("//", 1)[1].split("/", 1)[0]
+        except Exception:
+            return "—"
+
+    bp_host = host(links.get("blueprintUrl", "https://blueprint.ascendly.one/x"))
+    ag_host = host(links.get("agreementUrl", "https://agreement.ascendly.one/x"))
+    ai_on = bool(os.getenv("OPENAI_API_KEY"))
+    ai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    body = f"""{REV_CSS}
+    <div class="rv-top"><h1>Studio Settings</h1>
+      <span class="muted" style="font-size:13px">Outbound & reply configuration lives under Manage → Reply Settings.</span></div>
+    <div class="rv-grid">
+      <div class="rv-card"><h3>Document service</h3>
+        <div style="margin-bottom:8px">{conn}</div>
+        <div class="rv-kv"><b>Client blueprints</b> {e(bp_host)}<br><b>Client agreements</b> {e(ag_host)}</div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Clients only ever see these two domains — Studio stays internal.</p>
+      </div>
+      <div class="rv-card"><h3>Studio AI</h3>
+        <div style="margin-bottom:8px">{pill("Enabled", "ok") if ai_on else pill("Disabled", "no")}</div>
+        <div class="rv-kv"><b>Model</b> {e(ai_model)}</div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">{"Available in every client workspace and on the AI Assistant page." if ai_on else "Add an OpenAI key to Studio's environment to enable the assistant."}</p>
+      </div>
+      <div class="rv-card"><h3>Default engagement</h3>
+        <div class="rv-kv"><b>Investment</b> $4,000/month<br><b>Initial term</b> 3 months<br><b>Total</b> $12,000</div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Applied to new clients; adjustable per client at any time before signing.</p>
+      </div>
+      <div class="rv-card"><h3>Notifications</h3>
+        <div class="rv-kv"><b>Internal email</b> rosis_s@ascendly.one</div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Receives signing alerts and countersign requests. Override per client when creating or editing.</p>
+      </div>
+    </div>
+    """
+    return layout("Studio Settings", "studio_settings", body)
 
 
 # ============================================================
@@ -349,6 +405,12 @@ def client_form(request: Request, slug: str = "", _: str = Depends(require_login
         if data.get("ok"):
             c = data["client"]
             intake = c.get("intake") or {}
+    else:
+        # handoff prefill: /clients/new?companyName=...&clientName=...&clientEmail=...
+        qp = request.query_params
+        for k in ("companyName", "clientName", "clientEmail", "clientTitle", "website", "industry"):
+            if qp.get(k):
+                c[k] = qp.get(k)
     defaults = {"ascendlyEmail": "rosis_s@ascendly.one", "investment": "$4,000/month", "termMonths": "3", "total": "$12,000"}
 
     FIELDS = [
@@ -429,20 +491,8 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
     idx = stage_idx(c)
     notice = f'<div class="rv-ok">{e(msg)}</div>' if msg else ""
 
-    # timeline (service audit + best-effort lead match from the reply system)
+    # timeline — the client relationship history (Studio-scoped events only)
     tl_items = [(a.get("at") or "", ev_label(a.get("event", "")), a.get("detail", ""), a.get("event", "")) for a in audit]
-    try:
-        import db
-        res = db.list_leads(search=c.get("clientEmail") or c.get("companyName"))
-        leads = res[0] if isinstance(res, tuple) else res
-        for l in (leads or [])[:3]:
-            at = str(getattr(l, "created_at", "") or "")
-            if at:
-                tl_items.append((at, "Lead replied (outbound)", getattr(l, "intent", "") or "", "lead"))
-            if getattr(l, "stage", "") == "booked":
-                tl_items.append((str(getattr(l, "updated_at", "") or at), "Meeting booked", "", "lead"))
-    except Exception:
-        pass
     tl_items.sort(key=lambda x: x[0], reverse=True)
     tl = "".join(
         f'<li class="{"view" if ev.endswith("_viewed") else ""}"><div class="t">{_fmt_at(at)}</div>'

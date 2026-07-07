@@ -738,11 +738,11 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
     # (key, label, icon, href, badge_count, danger)
     nav_groups = [
         ("Studio", "auto_awesome", [
-            ("home", "Home", "space_dashboard", "/home", counts.get("needs_review", 0) or None, True),
+            ("home", "Home", "space_dashboard", "/home", None, False),
             ("clients", "Clients", "group", "/clients", None, False),
             ("templates", "Templates", "category", "/templates", None, False),
             ("rev_ai", "AI Assistant", "smart_toy", "/assistant", None, False),
-            ("settings", "Settings", "settings", "/dashboard/settings", None, False),
+            ("studio_settings", "Settings", "settings", "/studio/settings", None, False),
         ]),
         ("Outbound", "campaign", [
             ("all", "All Replies", "dashboard", "/dashboard", counts.get("total", 0), False),
@@ -767,6 +767,7 @@ def layout(title, active, body, current_ws="", with_drawer=False, crm_active="")
         ]),
         ("Manage", "settings", [
             ("workspaces", "Workspaces", "corporate_fare", "/dashboard/workspaces", None, False),
+            ("settings", "Reply Settings", "settings", "/dashboard/settings", None, False),
             ("support", "Support", "help", "/dashboard/soon?name=Help+%26+Support", None, False),
         ]),
     ]
