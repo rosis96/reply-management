@@ -330,6 +330,10 @@ def studio_settings(request: Request, _: str = Depends(require_login)):
     ag_host = host(links.get("agreementUrl", "https://agreement.ascendly.one/x"))
     ai_on = bool(os.getenv("OPENAI_API_KEY"))
     ai_model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    info = svc("GET", "/service/info")
+    gen_model = info.get("generationModel", "unknown") if info.get("ok") else "unknown"
+    gen_ver = info.get("version", "unknown") if info.get("ok") else "unknown"
+    gen_on = bool(info.get("aiEnabled")) if info.get("ok") else False
 
     body = f"""{REV_CSS}
     <div class="rv-top"><h1>Studio Settings</h1>
@@ -340,7 +344,12 @@ def studio_settings(request: Request, _: str = Depends(require_login)):
         <div class="rv-kv"><b>Client blueprints</b> {e(bp_host)}<br><b>Client agreements</b> {e(ag_host)}</div>
         <p class="muted" style="font-size:12px;margin:10px 0 0">Clients only ever see these two domains — Studio stays internal.</p>
       </div>
-      <div class="rv-card"><h3>Studio AI</h3>
+      <div class="rv-card"><h3>Document generation (Blueprints &amp; Agreements)</h3>
+        <div style="margin-bottom:8px">{pill("Enabled", "ok") if gen_on else pill("Disabled", "no")} {pill(gen_ver, "blue")}</div>
+        <div class="rv-kv"><b>Model</b> {e(gen_model)}</div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Writes the client-facing content from your call transcripts. Transcript decisions always take priority — defaults below apply only when the call never covered terms.</p>
+      </div>
+      <div class="rv-card"><h3>Studio AI (chat assistant)</h3>
         <div style="margin-bottom:8px">{pill("Enabled", "ok") if ai_on else pill("Disabled", "no")}</div>
         <div class="rv-kv"><b>Model</b> {e(ai_model)}</div>
         <p class="muted" style="font-size:12px;margin:10px 0 0">{"Available in every client workspace and on the AI Assistant page." if ai_on else "Add an OpenAI key to Studio's environment to enable the assistant."}</p>
@@ -509,8 +518,12 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
         mismatch = _err("⚠ Studio AI flagged a mismatch: the transcript appears to be about a different company than this workspace. Check the AI notes in the Blueprint tab before publishing.")
     ai_block = ""
     if aisum:
+        com = aisum.get("commercial") or {}
+        com_line = (f'{e(str(com.get("investment", "")))} · {e(str(com.get("termMonths", "")))} months · {e(str(com.get("total", "")))}'
+                    if com else "none detected in the call — defaults in use")
         ai_block = (f'<div class="rv-kv" style="margin-top:8px"><b>AI bottleneck</b> {e(aisum.get("mainBottleneck", ""))}<br>'
                     f'<b>AI focus</b> {e(aisum.get("recommendedFocus", ""))}<br>'
+                    f'<b>Call pricing</b> {com_line}<br>'
                     f'<b>Notes for us</b> {e(aisum.get("notesForAscendly", ""))}</div>')
 
     has_transcript = bool(str(intake.get("transcript") or "").strip())
@@ -723,7 +736,11 @@ async def ws_patch(slug: str, request: Request, _: str = Depends(require_login))
 @router.post("/clients/{slug}/regen")
 async def ws_regen(slug: str, request: Request, _: str = Depends(require_login)):
     r = svc("POST", f"/service/clients/{slug}/ai", {"force": True})
-    r["msg"] = "AI personalization regenerated."
+    if r.get("ok"):
+        com = (r.get("aiSummary") or {}).get("commercial")
+        inv = (r.get("client") or {}).get("investment", "")
+        r["msg"] = (f"Regenerated from the call. Call pricing applied: {inv}." if com
+                    else "Regenerated. No specific pricing found in the call — default terms kept.")
     return JSONResponse(r)
 
 
@@ -826,7 +843,7 @@ async def save_transcript(slug: str, request: Request, _: str = Depends(require_
     it = c.get("intake") or {}
 
     body = {
-        "slug": slug, "overwrite": True,
+        "slug": slug, "overwrite": True, "skipAI": True,
         "companyName": c.get("companyName"), "clientName": c.get("clientName"),
         "clientEmail": c.get("clientEmail"), "ascendlyEmail": c.get("ascendlyEmail"),
         "clientTitle": c.get("clientTitle"), "website": c.get("website"),
@@ -848,7 +865,12 @@ async def save_transcript(slug: str, request: Request, _: str = Depends(require_
     # generate now (synchronous) so the workspace comes back fully personalized
     ai = svc("POST", f"/service/clients/{slug}/ai", {"force": True})
     if ai.get("ok"):
-        msg = "Transcript saved — Blueprint personalization %26 Agreement variables generated. Review, then publish."
+        com = (ai.get("aiSummary") or {}).get("commercial")
+        inv = (ai.get("client") or {}).get("investment", "")
+        if com:
+            msg = f"Blueprint %26 Agreement generated from the call. Call pricing applied: {inv}."
+        else:
+            msg = "Blueprint %26 Agreement generated. No specific pricing was found in the call — default terms kept (edit in the Agreement tab if needed)."
     else:
         msg = "Transcript saved. AI generation issue: " + ai.get("error", "unknown")[:120]
     return RedirectResponse(f"/clients/{slug}?msg={msg}", status_code=303)
