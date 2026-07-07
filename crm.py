@@ -252,9 +252,10 @@ def crm_list(request: Request, workspace: str = None, q: str = "", _: str = Depe
           <td>{e(o.email or "")}</td>
           <td>{e(o.workspace_name or "")}</td>
           <td>{_tag_pills(o, tagmap) or "—"}</td>
+          <td><a class="btn sec sm" href="/promote?opp_id={o.id}" onclick="event.stopPropagation()" title="Create a Studio client from this opportunity">→ Studio</a></td>
         </tr>"""
     if not rows:
-        rows = '<tr><td colspan="6" class="empty">No opportunities yet.</td></tr>'
+        rows = '<tr><td colspan="7" class="empty">No opportunities yet.</td></tr>'
     body = f"""
     {CRM_CSS}
     <div class="crm-top">
@@ -266,7 +267,7 @@ def crm_list(request: Request, workspace: str = None, q: str = "", _: str = Depe
       </div>
     </div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Company</th><th>Stage</th><th>Value</th><th>Email</th><th>Client</th><th>Tags</th></tr></thead>
+      <thead><tr><th>Company</th><th>Stage</th><th>Value</th><th>Email</th><th>Client</th><th>Tags</th><th></th></tr></thead>
       <tbody>{rows}</tbody></table></div>
     {_crm_drawer()}
     {CRM_JS}

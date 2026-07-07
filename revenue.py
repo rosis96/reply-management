@@ -13,6 +13,7 @@ Env:
 """
 
 import os
+import re
 import json
 
 import requests
@@ -509,6 +510,29 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
                     f'<b>AI focus</b> {e(aisum.get("recommendedFocus", ""))}<br>'
                     f'<b>Notes for us</b> {e(aisum.get("notesForAscendly", ""))}</div>')
 
+    has_transcript = bool(str(intake.get("transcript") or "").strip())
+    if not has_transcript:
+        transcript_card = f"""
+        <div class="rv-card" style="border-color:#ddd6fe;background:#fbfaff">
+          <h3>📋 Add the discovery-call transcript</h3>
+          <p class="muted" style="font-size:13px;margin:0 0 10px">Paste the Fathom transcript or your meeting notes.
+          Studio AI will generate the Blueprint personalization and Agreement variables from it — the blueprint stays in draft until you publish.</p>
+          <form method="post" action="/clients/{e(slug)}/transcript" class="rv-form">
+            <textarea name="transcript" style="min-height:150px" placeholder="Paste the full call transcript here…"></textarea>
+            <div class="rv-actions"><button class="btn" type="submit">Save &amp; Generate Blueprint + Agreement</button></div>
+          </form>
+        </div>"""
+    else:
+        tlen = len(str(intake.get("transcript") or ""))
+        transcript_card = f"""
+        <details class="rv-card" style="margin-bottom:14px">
+          <summary style="cursor:pointer;font-size:13px"><b>📋 Transcript on file</b> <span class="muted">({tlen:,} characters — click to replace &amp; regenerate)</span></summary>
+          <form method="post" action="/clients/{e(slug)}/transcript" class="rv-form" style="margin-top:10px">
+            <textarea name="transcript" style="min-height:150px">{e(str(intake.get("transcript") or ""))}</textarea>
+            <div class="rv-actions"><button class="btn sm" type="submit">Replace &amp; Regenerate</button></div>
+          </form>
+        </details>"""
+
     published = c.get("published", True)
     pub_btn = (f'<button class="btn sec sm" onclick="rvPost(\'/clients/{e(slug)}/publish\',{{published:false}},this)">Unpublish</button>'
                if published else
@@ -532,6 +556,7 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
       </div>
     </div>
     {_stage_strip(idx)}
+    {transcript_card}
     {_next_action(c, slug, links)}
 
     <div class="rv-cols">
@@ -709,6 +734,114 @@ async def ws_resend(slug: str, request: Request, _: str = Depends(require_login)
 @router.post("/clients/{slug}/delete")
 async def ws_delete(slug: str, _: str = Depends(require_login)):
     return JSONResponse(svc("DELETE", f"/service/clients/{slug}"))
+
+
+# ============================================================
+# CRM → STUDIO PROMOTION (manual, one click per opportunity)
+# ============================================================
+
+def _slugify(v):
+    out = re.sub(r"[^a-z0-9]+", "-", str(v or "").lower()).strip("-")
+    return out[:40]
+
+
+@router.get("/promote")
+def promote_opportunity(request: Request, opp_id: int = 0, _: str = Depends(require_login)):
+    """Create a Studio client from a CRM opportunity. CRM stays the source of
+    booked meetings; Studio begins here — manually, never automatically."""
+    import db
+    o = db.get_opportunity(opp_id)
+    if not o:
+        return HTMLResponse(layout("Promote", "clients", REV_CSS + _err(f"Opportunity {opp_id} not found.")))
+
+    company = (o.company or o.deal_name or "").strip()
+    if not company:
+        return HTMLResponse(layout("Promote", "clients", REV_CSS + _err("This opportunity has no company name — add one in the CRM first.")))
+    slug = _slugify(company)
+
+    # already promoted? go straight to the workspace
+    existing = svc("GET", f"/service/clients/{slug}")
+    if existing.get("ok"):
+        return RedirectResponse(f"/clients/{slug}?msg=Already in Studio — this opportunity was promoted earlier.", status_code=303)
+
+    notes = []
+    if getattr(o, "lead_intent", ""):
+        notes.append(f"Lead intent: {o.lead_intent}")
+    if getattr(o, "meeting_outcome", ""):
+        notes.append(f"Meeting outcome: {o.meeting_outcome}")
+    if getattr(o, "next_step", ""):
+        notes.append(f"Agreed next step: {o.next_step}")
+    if getattr(o, "close_date", ""):
+        notes.append(f"Estimated close: {o.close_date}")
+    if getattr(o, "source", ""):
+        notes.append(f"Source: {o.source}")
+    if getattr(o, "description", ""):
+        notes.append(f"Notes: {o.description}")
+
+    body = {
+        "companyName": company,
+        "clientName": (o.contact_name or "").strip() or company,
+        "clientEmail": (o.email or "").strip(),
+        "website": (o.website or "").strip(),
+        "salesCallNotes": "\n".join(notes),
+        "pricingNotes": (f"CRM deal value: ${int(o.value):,}" if getattr(o, "value", 0) else ""),
+        "slug": slug,
+    }
+    if not body["clientEmail"]:
+        return HTMLResponse(layout("Promote", "clients", REV_CSS + _err("This opportunity has no email — add one in the CRM first.")))
+
+    r = svc("POST", "/service/clients", body)
+    if not r.get("ok"):
+        return HTMLResponse(layout("Promote", "clients", REV_CSS + _err(r.get("error", "Promotion failed."))))
+    # promoted clients start as DRAFT — nothing goes live until you publish
+    svc("PATCH", f"/service/clients/{r['slug']}", {"published": False})
+    return RedirectResponse(
+        f"/clients/{r['slug']}?msg=Promoted from CRM. Paste the call transcript below to generate the Blueprint %26 Agreement.",
+        status_code=303)
+
+
+@router.post("/clients/{slug}/transcript")
+async def save_transcript(slug: str, request: Request, _: str = Depends(require_login)):
+    """Save/replace the transcript, then generate blueprint personalization +
+    agreement variables (uses the existing upsert + AI Service API endpoints)."""
+    form = dict(await request.form())
+    transcript = str(form.get("transcript", "")).strip()
+    if len(transcript) < 50:
+        return RedirectResponse(f"/clients/{slug}?msg=Transcript looks empty — paste the full call transcript.", status_code=303)
+
+    data = svc("GET", f"/service/clients/{slug}")
+    if not data.get("ok"):
+        return HTMLResponse(layout("Error", "clients", REV_CSS + _err(data.get("error", "Not found"))))
+    c = data["client"]
+    it = c.get("intake") or {}
+
+    body = {
+        "slug": slug, "overwrite": True,
+        "companyName": c.get("companyName"), "clientName": c.get("clientName"),
+        "clientEmail": c.get("clientEmail"), "ascendlyEmail": c.get("ascendlyEmail"),
+        "clientTitle": c.get("clientTitle"), "website": c.get("website"),
+        "industry": c.get("industry"), "companyAddress": c.get("companyAddress"),
+        "clientLogo": c.get("clientLogo"), "agreementId": c.get("agreementId"),
+        "investment": c.get("investment"), "termMonths": c.get("termMonths"),
+        "total": c.get("total"), "startDate": c.get("startDate"), "preparedDate": c.get("preparedDate"),
+        "currentBottlenecks": c.get("mainBottleneck"), "recommendedFocus": c.get("recommendedFocus"),
+        "transcript": transcript,
+        "companyDetails": it.get("companyDetails", ""), "whatTheySell": it.get("whatTheySell", ""),
+        "targetCustomers": it.get("targetCustomers", ""), "salesCallNotes": it.get("salesCallNotes", ""),
+        "promisedScope": it.get("promisedScope", ""), "pricingNotes": it.get("pricingNotes", ""),
+        "risks": it.get("risks", ""), "blueprintInstructions": it.get("blueprintInstructions", ""),
+    }
+    r = svc("POST", "/service/clients", body)
+    if not r.get("ok"):
+        return HTMLResponse(layout("Error", "clients", REV_CSS + _err(r.get("error", "Save failed"))))
+
+    # generate now (synchronous) so the workspace comes back fully personalized
+    ai = svc("POST", f"/service/clients/{slug}/ai", {"force": True})
+    if ai.get("ok"):
+        msg = "Transcript saved — Blueprint personalization %26 Agreement variables generated. Review, then publish."
+    else:
+        msg = "Transcript saved. AI generation issue: " + ai.get("error", "unknown")[:120]
+    return RedirectResponse(f"/clients/{slug}?msg={msg}", status_code=303)
 
 
 # ============================================================
