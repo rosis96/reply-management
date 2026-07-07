@@ -781,7 +781,7 @@ def assistant_page(request: Request, _: str = Depends(require_login)):
     }}
     </script>
     """
-    return layout("Studio AI", "clients", body)
+    return layout("AI Assistant", "rev_ai", body)
 
 
 @router.post("/assistant/chat")
