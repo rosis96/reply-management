@@ -517,6 +517,31 @@ def save_workspace(ws_id, data):
         session.close()
 
 
+def duplicate_workspace(ws_id, new_name=""):
+    """Copy a workspace's full configuration (platform, keys, Calendly, AI,
+    client profile, reply format) to a new workspace. Leads/opportunities
+    are NOT copied — data stays with the original. Returns the new id."""
+    session = SessionLocal()
+    try:
+        src = session.query(Workspace).filter(Workspace.id == int(ws_id)).first()
+        if not src:
+            return None
+        name = (new_name or "").strip() or f"{src.name} (copy)"
+        base, n = name, 2
+        while session.query(Workspace).filter(Workspace.name == name).first():
+            name = f"{base} {n}"
+            n += 1
+        skip = {"id", "name", "created_at", "updated_at"}
+        data = {col.name: getattr(src, col.name)
+                for col in Workspace.__table__.columns if col.name not in skip}
+        dup = Workspace(name=name, **data)
+        session.add(dup)
+        session.commit()
+        return dup.id
+    finally:
+        session.close()
+
+
 def delete_workspace(ws_id):
     session = SessionLocal()
     try:

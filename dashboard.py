@@ -1381,7 +1381,7 @@ def workspaces_page(request: Request, _: str = Depends(require_login)):
     workspaces = db.list_workspaces()
     rows = ""
     if not workspaces:
-        rows = '<tr><td colspan="5" class="muted">No workspaces yet.</td></tr>'
+        rows = '<tr><td colspan="6" class="muted">No workspaces yet.</td></tr>'
     for w in workspaces:
         key_state = pill("Set", "ok") if w.api_key else pill("Missing", "no")
         rows += f"""<tr>
@@ -1390,11 +1390,15 @@ def workspaces_page(request: Request, _: str = Depends(require_login)):
           <td>{key_state}</td>
           <td>{e(w.reply_followup_campaign_id)}</td>
           <td>{pill("Active","ok") if w.active else pill("Off","muted")}</td>
+          <td><form method="post" action="/dashboard/workspaces/{w.id}/duplicate" style="margin:0"
+                onsubmit="var n=prompt('Name for the duplicate:','{e(w.name)} (copy)');if(n===null)return false;this.new_name.value=n;">
+                <input type="hidden" name="new_name" value="">
+                <button class="btn sec sm" type="submit">Duplicate</button></form></td>
         </tr>"""
     body = f"""
     <div class="flex"><h1>Workspaces</h1><a class="btn right" href="/dashboard/workspaces/new">+ Add workspace</a></div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Name</th><th>Platform</th><th>API key</th><th>Follow-up campaign</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Platform</th><th>API key</th><th>Follow-up campaign</th><th>Status</th><th></th></tr></thead>
       <tbody>{rows}</tbody></table></div>
     """
     return HTMLResponse(layout("Workspaces", "workspaces", body, current_ws=request.cookies.get("ws", "")))
@@ -1712,6 +1716,16 @@ async def workspace_update(ws_id: int, request: Request, _: str = Depends(requir
         return HTMLResponse(_workspace_form(ws, error=str(ex), current_ws=request.cookies.get("ws", "")))
     db.save_workspace(ws_id, data)
     return RedirectResponse("/dashboard/workspaces", status_code=303)
+
+
+@router.post("/dashboard/workspaces/{ws_id}/duplicate")
+async def workspace_duplicate(ws_id: int, request: Request, _: str = Depends(require_login)):
+    form = await request.form()
+    new_id = db.duplicate_workspace(ws_id, form.get("new_name", ""))
+    if not new_id:
+        return RedirectResponse("/dashboard/workspaces", status_code=303)
+    # land directly in the copy's edit page so it can be adjusted immediately
+    return RedirectResponse(f"/dashboard/workspaces/{new_id}", status_code=303)
 
 
 @router.post("/dashboard/workspaces/{ws_id}/delete")
