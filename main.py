@@ -1835,7 +1835,38 @@ def find_instantly_lead(email, campaign_id, preferred_name=None):
     return None, None
 
 
-def process_instantly_reply(payload, workspace_name="Webaholics"):
+def find_instantly_workspace_by_campaign(campaign_id):
+    """Which workspace's Instantly account owns this campaign?
+
+    Used to attribute a lead to the RIGHT workspace even when the lead itself
+    can't be found (deleted lead, API hiccup, etc.). Campaign ownership is
+    factual — the campaign exists in exactly one Instantly account."""
+    if not campaign_id:
+        return None
+    try:
+        candidates = [
+            w for w in db.list_workspaces()
+            if w.platform == "instantly" and w.active and (w.api_key or "")
+        ]
+    except Exception as ex:
+        log(f"Campaign ownership check: failed to list workspaces: {ex}")
+        return None
+
+    for w in candidates:
+        try:
+            r = requests.get(
+                f"https://api.instantly.ai/api/v2/campaigns/{campaign_id}",
+                headers=instantly_headers(w.api_key), timeout=15
+            )
+            if r.status_code == 200:
+                log(f"Campaign {campaign_id} belongs to workspace '{w.name}'")
+                return w.name
+        except Exception as ex:
+            log(f"Campaign ownership check failed in '{w.name}': {ex}")
+    return None
+
+
+def process_instantly_reply(payload, workspace_name=None):
     delay = get_reply_delay()
     log(f"Received Instantly job. Waiting {delay} seconds before replying.")
     time.sleep(delay)
@@ -1863,9 +1894,17 @@ def process_instantly_reply(payload, workspace_name="Webaholics"):
     if not workspace or not lead_id:
         log("No Instantly lead found in ANY active Instantly workspace. "
             "Make sure a workspace has the API key for the Instantly account that owns this campaign.")
+        # Attribute the record to the correct workspace instead of a default:
+        # 1) which account owns the campaign (factual), 2) explicit ?workspace_name=
+        # hint from the webhook URL, 3) 'Unrouted' — never another workspace's inbox.
+        record_ws = find_instantly_workspace_by_campaign(campaign_id)
+        if not record_ws and workspace_name and db.get_workspace_config(workspace_name):
+            record_ws = workspace_name
+        record_ws = record_ws or "Unrouted"
+        log(f"Recording unmatched Instantly lead under workspace: {record_ws}")
         record_lead(
             platform="instantly",
-            workspace_name=workspace_name,
+            workspace_name=record_ws,
             external_lead_id="",
             reply_id="",
             ai_result={"intent": "instantly_lead_not_found", "main_reply": ""},
@@ -2237,7 +2276,8 @@ def resolve_instantly_workspace(payload):
 
     1. Use workspace_name from the payload if it's present and valid.
     2. Otherwise, if exactly one Instantly workspace is marked Active, use it.
-    3. Otherwise fall back to 'Webaholics'.
+    3. Otherwise return None — routing is resolved later by API-key match
+       (find_instantly_lead) or campaign ownership. Never a hardcoded default.
     """
     name = payload.get("workspace_name") or payload.get("workspace")
     if name and db.get_workspace_config(name):
@@ -2253,7 +2293,7 @@ def resolve_instantly_workspace(payload):
     except Exception as ex:
         log(f"Instantly workspace auto-detect failed: {ex}")
 
-    return "Webaholics"
+    return None
 
 
 @app.post("/instantly-reply")
@@ -2270,7 +2310,7 @@ async def instantly_reply_webhook(request: Request, background_tasks: Background
     qp = request.query_params
     workspace_name = (qp.get("workspace_name") or qp.get("ws")
                       or resolve_instantly_workspace(payload))
-    log(f"Instantly webhook routed to workspace: {workspace_name}")
+    log(f"Instantly webhook routed to workspace: {workspace_name or 'auto (matched by API key)'}")
 
     background_tasks.add_task(process_instantly_reply, payload, workspace_name)
 

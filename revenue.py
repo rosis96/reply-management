@@ -59,6 +59,8 @@ EVENT_LABELS = {
     "updated": "Details updated",
     "patched": "Fields updated",
     "ai_regenerated": "Blueprint personalization regenerated",
+    "blueprint_custom_uploaded": "Custom blueprint uploaded (replaces generated page)",
+    "blueprint_custom_removed": "Custom blueprint removed — generated page restored",
     "client_signed": "Client signed the agreement",
     "countersigned": "Countersigned — agreement executed",
     "pdf_generated": "Executed PDF generated & emailed",
@@ -427,7 +429,8 @@ def client_form(request: Request, slug: str = "", _: str = Depends(require_login
         ("companyName", "Company name *"), ("slug", "Slug (auto)"), ("website", "Website"), ("industry", "Industry"),
         ("clientName", "Contact name *"), ("clientTitle", "Contact title"),
         ("clientEmail", "Client email *"), ("ascendlyEmail", "Internal Ascendly email"),
-        ("companyAddress", "Company address"), ("clientLogo", "Client logo URL"),
+        ("companyAddress", "Company address"), ("clientLogo", "Client logo (URL or data-URI)"),
+        ("brandColor", "Brand color hex (tints blueprint; empty = auto from logo)"),
         ("agreementId", "Agreement ID (auto)"), ("investment", "Investment"),
         ("termMonths", "Term (months)"), ("total", "Total"),
         ("startDate", "Start date"), ("preparedDate", "Prepared date"),
@@ -521,10 +524,18 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
         com = aisum.get("commercial") or {}
         com_line = (f'{e(str(com.get("investment", "")))} · {e(str(com.get("termMonths", "")))} months · {e(str(com.get("total", "")))}'
                     if com else "none detected in the call — defaults in use")
+        quotes = [q for q in (aisum.get("theirWords") or []) if isinstance(q, dict) and str(q.get("quote", "")).strip()]
+        qhtml = "".join(
+            f'<div style="font-style:italic;color:#4b5563;font-size:13px;border-left:3px solid #c7bfff;padding:4px 0 4px 10px;margin:6px 0">&ldquo;{e(str(q.get("quote", "")))}&rdquo;'
+            + (f' <span style="color:#9ca3af;font-style:normal;font-size:11.5px">&mdash; {e(str(q.get("context", "")))}</span>' if q.get("context") else "")
+            + "</div>" for q in quotes)
+        see = str(aisum.get("whatWeSee") or "").strip()
         ai_block = (f'<div class="rv-kv" style="margin-top:8px"><b>AI bottleneck</b> {e(aisum.get("mainBottleneck", ""))}<br>'
                     f'<b>AI focus</b> {e(aisum.get("recommendedFocus", ""))}<br>'
                     f'<b>Call pricing</b> {com_line}<br>'
-                    f'<b>Notes for us</b> {e(aisum.get("notesForAscendly", ""))}</div>')
+                    f'<b>Notes for us</b> {e(aisum.get("notesForAscendly", ""))}</div>'
+                    + (f'<div class="rv-kv" style="margin-top:10px"><b>What we see in them</b> {e(see)}</div>' if see else "")
+                    + (f'<div style="margin-top:10px"><b style="font-size:12px">Their words (pull quotes on the page)</b>{qhtml}</div>' if qhtml else ""))
 
     has_transcript = bool(str(intake.get("transcript") or "").strip())
     if not has_transcript:
@@ -625,6 +636,24 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
     locked = bool(sig.get("locked"))
     lock_note = '<div class="muted" style="font-size:12px;margin-top:6px">Locked — agreement is executed.</div>' if locked else ""
     dis = "disabled" if locked else ""
+    custom_bp = bool(c.get("customBlueprint"))
+    bp_badge = ' &middot; <span style="color:#7c6cf6;font-size:12px">CUSTOM PAGE ACTIVE</span>' if custom_bp else ""
+    bp_desc = ("This client sees your uploaded page instead of the generated one. The generated version is kept and can be restored anytime."
+               if custom_bp else
+               "Built a bespoke proposal outside Studio (e.g. with Claude)? Upload the full HTML page — it replaces the generated blueprint at the same client link. Template variables like {{companyName}} and {{agreementUrl}} keep working.")
+    bp_revert = (f'<button class="btn sec sm" onclick="rvPost(\'/clients/{e(slug)}/custombp/remove\',{{}},this)">Revert to generated</button>'
+                 if custom_bp else "")
+    custom_card = f"""
+          <div class="rv-card"><h3>Custom blueprint{bp_badge}</h3>
+            <p class="muted" style="font-size:12.5px;margin:4px 0 10px">{bp_desc}</p>
+            <input type="file" accept=".html,.htm" onchange="rvBPfile(this)" style="font-size:12px">
+            <textarea id="bp-html" placeholder="&hellip;or paste the full HTML here" style="min-height:90px;width:100%;margin-top:8px;font-family:monospace;font-size:11px"></textarea>
+            <div class="rv-actions">
+              <button class="btn sm" onclick="rvUploadBP(this)">Upload &amp; activate</button>
+              {bp_revert}
+            </div>
+          </div>"""
+
     exec_html = ""
     if sig.get("executedAt"):
         exec_html = (f'<a class="btn ok sm" href="{e(links.get("downloadUrl", ""))}">Download PDF</a>'
@@ -683,6 +712,7 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
             {ai_block}
           </div>
           {readiness}
+          {custom_card}
         </div>
 
         <div class="rv-pane" id="p-ag">
@@ -742,6 +772,10 @@ def client_workspace(slug: str, request: Request, msg: str = "", _: str = Depend
       }};
     }});
     function rvCopy(t,b){{navigator.clipboard.writeText(t).then(()=>{{var o=b.textContent;b.textContent='Copied ✓';setTimeout(()=>b.textContent=o,1500)}})}}
+    function rvBPfile(i){{var f=i.files[0];if(!f)return;f.text().then(function(t){{document.getElementById('bp-html').value=t}})}}
+    function rvUploadBP(b){{var h=document.getElementById('bp-html').value;
+      if(h.length<200){{alert('Choose an .html file or paste a full HTML page first.');return}}
+      rvPost('/clients/{e(slug)}/custombp',{{html:h}},b)}}
     function rvPost(u,body,b){{
       if(b){{b.disabled=true}}
       fetch(u,{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body||{{}})}})
@@ -821,6 +855,23 @@ async def ws_regen(slug: str, request: Request, _: str = Depends(require_login))
 async def ws_resend(slug: str, request: Request, _: str = Depends(require_login)):
     r = svc("POST", f"/service/clients/{slug}/resend-executed")
     r["msg"] = "Executed agreement re-sent to both parties."
+    return JSONResponse(r)
+
+
+@router.post("/clients/{slug}/custombp")
+async def ws_custombp(slug: str, request: Request, _: str = Depends(require_login)):
+    b = await request.json()
+    r = svc("POST", f"/service/clients/{slug}/blueprint-html", {"html": str(b.get("html") or "")})
+    if r.get("ok"):
+        r["msg"] = "Custom blueprint uploaded — this page is now live at the client link."
+    return JSONResponse(r)
+
+
+@router.post("/clients/{slug}/custombp/remove")
+async def ws_custombp_remove(slug: str, _: str = Depends(require_login)):
+    r = svc("DELETE", f"/service/clients/{slug}/blueprint-html")
+    if r.get("ok"):
+        r["msg"] = "Reverted — the generated blueprint is live again."
     return JSONResponse(r)
 
 
@@ -921,7 +972,7 @@ async def save_transcript(slug: str, request: Request, _: str = Depends(require_
         "clientEmail": c.get("clientEmail"), "ascendlyEmail": c.get("ascendlyEmail"),
         "clientTitle": c.get("clientTitle"), "website": c.get("website"),
         "industry": c.get("industry"), "companyAddress": c.get("companyAddress"),
-        "clientLogo": c.get("clientLogo"), "agreementId": c.get("agreementId"),
+        "clientLogo": c.get("clientLogo"), "brandColor": c.get("brandColor"), "agreementId": c.get("agreementId"),
         "investment": c.get("investment"), "termMonths": c.get("termMonths"),
         "total": c.get("total"), "startDate": c.get("startDate"), "preparedDate": c.get("preparedDate"),
         "currentBottlenecks": c.get("mainBottleneck"), "recommendedFocus": c.get("recommendedFocus"),
